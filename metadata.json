@@ -1,0 +1,5 @@
+{
+  "name": "Unacademy",
+  "description": "A high-fidelity recreation of the Supabase dashboard layout featuring an AI-powered SQL Editor, real-time analytics visualization, and responsive table management.",
+  "requestFramePermissions": []
+}
