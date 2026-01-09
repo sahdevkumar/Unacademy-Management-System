@@ -1,11 +1,33 @@
 import { GoogleGenAI } from "@google/genai";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
+// Helper to safely get environment variables
+const getEnv = (key: string) => {
+  if (typeof process !== 'undefined' && process.env && process.env[key]) {
+    return process.env[key];
+  }
+  // Check for Vite-style env vars just in case
+  try {
+     const meta = import.meta as any;
+     if (meta && meta.env && meta.env[key]) return meta.env[key];
+  } catch (e) {
+      // Ignore
+  }
+  return '';
+};
+
+const apiKey = getEnv('API_KEY') || getEnv('VITE_API_KEY') || getEnv('NEXT_PUBLIC_API_KEY');
+
+// Initialize AI only if we have a key or let it fail gracefully later
+const ai = new GoogleGenAI({ apiKey: apiKey || 'dummy-key-to-prevent-crash' });
 
 export const generateSqlQuery = async (prompt: string): Promise<string> => {
-  if (!process.env.API_KEY) {
+  if (!apiKey || apiKey === 'dummy-key-to-prevent-crash') {
     console.warn("API Key is missing. Returning mock data.");
-    return "-- API Key missing. Please provide a valid key to generate SQL.\nSELECT * FROM users WHERE active = true;";
+    // Simulate network delay
+    await new Promise(r => setTimeout(r, 1000));
+    return `-- API Key missing. Please provide a valid key in .env to generate SQL.
+-- Example Query based on your request: "${prompt}"
+SELECT * FROM public.users WHERE created_at > NOW() - INTERVAL '7 days';`;
   }
 
   try {
@@ -18,9 +40,13 @@ export const generateSqlQuery = async (prompt: string): Promise<string> => {
       Request: ${prompt}`,
     });
 
-    return response.text.replace(/```sql/g, '').replace(/```/g, '').trim();
+    if (response.text) {
+        return response.text.replace(/```sql/g, '').replace(/```/g, '').trim();
+    }
+    throw new Error("Empty response from AI");
   } catch (error) {
     console.error("Error generating SQL:", error);
-    return "-- Error generating query. Please try again.";
+    return `-- Error generating query: ${error instanceof Error ? error.message : String(error)}
+-- Please check your API key and connection.`;
   }
 };
