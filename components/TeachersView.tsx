@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { Plus, Search, Trash2, Mail, Phone, Briefcase, User, GraduationCap, X, Loader2, Check, LayoutGrid, List, Edit2 } from 'lucide-react';
+import React, { useEffect, useState, useRef } from 'react';
+import { Plus, Search, Trash2, Mail, Phone, Briefcase, User, GraduationCap, X, Loader2, Check, LayoutGrid, List, Edit2, Camera, Upload } from 'lucide-react';
 import { Teacher } from '../types';
 import { scheduleService } from '../services/scheduleService';
 import { useToast } from '../context/ToastContext';
@@ -18,6 +18,11 @@ const TeachersView: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   
+  // Image Upload State
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const { showToast } = useToast();
 
   const [formData, setFormData] = useState<{
@@ -25,11 +30,13 @@ const TeachersView: React.FC = () => {
       email: string;
       subjects: string[];
       phone: string;
+      profile_photo_url?: string;
   }>({
       name: '',
       email: '',
       subjects: [],
-      phone: ''
+      phone: '',
+      profile_photo_url: ''
   });
 
   useEffect(() => {
@@ -54,9 +61,13 @@ const TeachersView: React.FC = () => {
           name: '',
           email: '',
           subjects: [],
-          phone: ''
+          phone: '',
+          profile_photo_url: ''
       });
       setEditingId(null);
+      setImageFile(null);
+      setImagePreview(null);
+      if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const handleCloseModal = () => {
@@ -69,10 +80,29 @@ const TeachersView: React.FC = () => {
           name: teacher.name,
           email: teacher.email,
           subjects: teacher.subjects || [],
-          phone: teacher.phone || ''
+          phone: teacher.phone || '',
+          profile_photo_url: teacher.profile_photo_url || ''
       });
+      setImagePreview(teacher.profile_photo_url || null);
       setEditingId(teacher.id);
       setIsModalOpen(true);
+  };
+
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      if (e.target.files && e.target.files[0]) {
+          const file = e.target.files[0];
+          setImageFile(file);
+          
+          // Create preview URL
+          const objectUrl = URL.createObjectURL(file);
+          setImagePreview(objectUrl);
+      }
+  };
+
+  const triggerFileInput = () => {
+      if (fileInputRef.current) {
+          fileInputRef.current.click();
+      }
   };
 
   const handleAddTeacher = async (e: React.FormEvent) => {
@@ -85,14 +115,32 @@ const TeachersView: React.FC = () => {
           return;
       }
 
+      // Handle Image Upload First
+      let finalPhotoUrl = formData.profile_photo_url;
+      if (imageFile) {
+          const { success, url, error } = await scheduleService.uploadTeacherPhoto(imageFile);
+          if (success && url) {
+              finalPhotoUrl = url;
+          } else {
+              showToast('Failed to upload image: ' + error, 'error');
+              setIsSubmitting(false);
+              return;
+          }
+      }
+
+      const teacherData = {
+          ...formData,
+          profile_photo_url: finalPhotoUrl
+      };
+
       let result;
       if (editingId) {
           // Update existing
-          const teacherToUpdate = { ...formData, id: editingId };
+          const teacherToUpdate = { ...teacherData, id: editingId };
           result = await scheduleService.updateTeacher(teacherToUpdate as Teacher);
       } else {
           // Add new
-          result = await scheduleService.addTeacher(formData);
+          result = await scheduleService.addTeacher(teacherData);
       }
 
       const { success, error } = result;
@@ -214,7 +262,7 @@ const TeachersView: React.FC = () => {
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                         {filteredTeachers.map(teacher => (
                             <div key={teacher.id} className="bg-supabase-panel border border-supabase-border rounded-lg p-5 hover:shadow-lg transition-all group relative">
-                                <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity flex gap-2">
+                                <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity flex gap-2 z-10">
                                     <button 
                                         onClick={() => handleEdit(teacher)}
                                         className="p-1.5 text-supabase-muted hover:text-supabase-text hover:bg-supabase-hover rounded transition-colors"
@@ -232,8 +280,14 @@ const TeachersView: React.FC = () => {
                                 </div>
                                 
                                 <div className="flex items-start gap-4 mb-4">
-                                    <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500/20 to-purple-500/20 flex items-center justify-center text-supabase-text font-bold text-lg border border-white/10 shrink-0">
-                                        {teacher.name.charAt(0)}
+                                    <div className="w-12 h-12 rounded-full flex items-center justify-center text-supabase-text font-bold text-lg border border-white/10 shrink-0 overflow-hidden bg-supabase-sidebar">
+                                        {teacher.profile_photo_url ? (
+                                            <img src={teacher.profile_photo_url} alt={teacher.name} className="w-full h-full object-cover" />
+                                        ) : (
+                                            <div className="w-full h-full bg-gradient-to-br from-blue-500/20 to-purple-500/20 flex items-center justify-center">
+                                                {teacher.name.charAt(0)}
+                                            </div>
+                                        )}
                                     </div>
                                     <div className="min-w-0">
                                         <h3 className="font-medium text-supabase-text text-base truncate">{teacher.name}</h3>
@@ -279,8 +333,14 @@ const TeachersView: React.FC = () => {
                                     <tr key={teacher.id} className="hover:bg-supabase-hover/50 group transition-colors">
                                         <td className="px-6 py-4 border-b border-supabase-border">
                                             <div className="flex items-center gap-3">
-                                                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500/20 to-purple-500/20 flex items-center justify-center text-supabase-text font-bold text-xs border border-white/10">
-                                                    {teacher.name.charAt(0)}
+                                                <div className="w-8 h-8 rounded-full flex items-center justify-center text-supabase-text font-bold text-xs border border-white/10 overflow-hidden bg-supabase-sidebar">
+                                                    {teacher.profile_photo_url ? (
+                                                        <img src={teacher.profile_photo_url} alt={teacher.name} className="w-full h-full object-cover" />
+                                                    ) : (
+                                                        <div className="w-full h-full bg-gradient-to-br from-blue-500/20 to-purple-500/20 flex items-center justify-center">
+                                                            {teacher.name.charAt(0)}
+                                                        </div>
+                                                    )}
                                                 </div>
                                                 <span className="text-sm font-medium text-supabase-text">{teacher.name}</span>
                                             </div>
@@ -349,7 +409,32 @@ const TeachersView: React.FC = () => {
                       </button>
                   </div>
                   
-                  <form onSubmit={handleAddTeacher} className="p-6 space-y-4 overflow-y-auto">
+                  <form onSubmit={handleAddTeacher} className="p-6 space-y-4 overflow-y-auto custom-scrollbar">
+                      
+                      {/* Image Upload */}
+                      <div className="flex justify-center mb-2">
+                          <div 
+                            className="relative w-20 h-20 rounded-full border border-supabase-border bg-supabase-bg group cursor-pointer overflow-hidden flex items-center justify-center"
+                            onClick={triggerFileInput}
+                          >
+                              {imagePreview ? (
+                                  <img src={imagePreview} alt="Preview" className="w-full h-full object-cover" />
+                              ) : (
+                                  <Camera size={24} className="text-supabase-muted" />
+                              )}
+                              <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                                  <Upload size={20} className="text-white" />
+                              </div>
+                          </div>
+                          <input 
+                              type="file" 
+                              ref={fileInputRef} 
+                              className="hidden" 
+                              accept="image/*"
+                              onChange={handleImageChange}
+                          />
+                      </div>
+
                       <div className="space-y-1.5">
                           <label className="text-xs font-medium text-supabase-muted">Full Name</label>
                           <div className="relative">

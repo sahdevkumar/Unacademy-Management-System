@@ -6,14 +6,14 @@ import { supabase } from '../services/supabaseClient';
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
-// Color themes for empty state cards
+// Color themes for empty state cards (Updated for Light Mode visibility)
 const EMPTY_THEMES = [
-    { wrapper: 'border-blue-500/30 bg-blue-500/5', overlay: 'bg-blue-500/5', text: 'text-blue-400/60' },
-    { wrapper: 'border-purple-500/30 bg-purple-500/5', overlay: 'bg-purple-500/5', text: 'text-purple-400/60' },
-    { wrapper: 'border-emerald-500/30 bg-emerald-500/5', overlay: 'bg-emerald-500/5', text: 'text-emerald-400/60' },
-    { wrapper: 'border-amber-500/30 bg-amber-500/5', overlay: 'bg-amber-500/5', text: 'text-amber-400/60' },
-    { wrapper: 'border-pink-500/30 bg-pink-500/5', overlay: 'bg-pink-500/5', text: 'text-pink-400/60' },
-    { wrapper: 'border-cyan-500/30 bg-cyan-500/5', overlay: 'bg-cyan-500/5', text: 'text-cyan-400/60' },
+    { wrapper: 'border-blue-200 dark:border-blue-500/30 bg-blue-50 dark:bg-blue-500/5', overlay: 'bg-blue-50 dark:bg-blue-500/5', text: 'text-blue-500/60 dark:text-blue-400/60' },
+    { wrapper: 'border-purple-200 dark:border-purple-500/30 bg-purple-50 dark:bg-purple-500/5', overlay: 'bg-purple-50 dark:bg-purple-500/5', text: 'text-purple-500/60 dark:text-purple-400/60' },
+    { wrapper: 'border-emerald-200 dark:border-emerald-500/30 bg-emerald-50 dark:bg-emerald-500/5', overlay: 'bg-emerald-50 dark:bg-emerald-500/5', text: 'text-emerald-500/60 dark:text-emerald-400/60' },
+    { wrapper: 'border-amber-200 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/5', overlay: 'bg-amber-50 dark:bg-amber-500/5', text: 'text-amber-500/60 dark:text-amber-400/60' },
+    { wrapper: 'border-pink-200 dark:border-pink-500/30 bg-pink-50 dark:bg-pink-500/5', overlay: 'bg-pink-50 dark:bg-pink-500/5', text: 'text-pink-500/60 dark:text-pink-400/60' },
+    { wrapper: 'border-cyan-200 dark:border-cyan-500/30 bg-cyan-50 dark:bg-cyan-500/5', overlay: 'bg-cyan-50 dark:bg-cyan-500/5', text: 'text-cyan-500/60 dark:text-cyan-400/60' },
 ];
 
 interface PublishedSchedule {
@@ -208,22 +208,26 @@ const DashboardView: React.FC = () => {
                                     {classes.map(session => (
                                         <div 
                                             key={session.id} 
-                                            className={`p-3 rounded-lg border ${session.color} border-opacity-40 bg-opacity-5 bg-supabase-panel hover:bg-opacity-10 transition-colors`}
+                                            className={`p-3 rounded-lg border ${session.color ? session.color.split(' ').filter(c => c.startsWith('border') || c.startsWith('bg-')).join(' ') : ''} border-opacity-40 bg-opacity-5 dark:bg-opacity-10 bg-supabase-panel hover:bg-opacity-10 transition-colors`}
                                         >
                                             <div className="flex flex-col gap-1.5">
-                                                <div className="font-medium text-sm leading-tight text-supabase-text">{session.title}</div>
-                                                <div className="flex items-center gap-2 text-xs opacity-70">
-                                                    <Clock size={12} />
-                                                    <span>{session.startTime} - {session.endTime}</span>
+                                                <div className={`font-medium text-sm leading-tight ${session.color ? session.color.split(' ').find(c => c.startsWith('text')) || 'text-supabase-text' : 'text-supabase-text'}`}>{session.title}</div>
+                                                
+                                                {/* Teacher Position (Swapped) */}
+                                                <div className="flex items-center gap-2 text-xs opacity-70 text-supabase-muted">
+                                                    <User size={12} />
+                                                    <span className="truncate">{session.instructor}</span>
                                                 </div>
-                                                <div className="flex items-center justify-between text-xs opacity-70 pt-1 border-t border-current border-opacity-20 mt-1">
+
+                                                <div className="flex items-center justify-between text-xs opacity-70 pt-1 border-t border-current border-opacity-20 mt-1 text-supabase-muted">
                                                      <div className="flex items-center gap-1.5">
                                                         <MapPin size={12} />
                                                         <span>{session.room}</span>
                                                      </div>
+                                                     {/* Time Position (Swapped) */}
                                                      <div className="flex items-center gap-1.5">
-                                                        <User size={12} />
-                                                        <span className="truncate max-w-[80px]">{session.instructor}</span>
+                                                        <Clock size={12} />
+                                                        <span>{session.startTime} - {session.endTime}</span>
                                                      </div>
                                                 </div>
                                             </div>

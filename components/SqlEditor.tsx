@@ -30,7 +30,7 @@ CREATE TABLE IF NOT EXISTS public.subjects (
     name TEXT NOT NULL UNIQUE
 );
 
--- 4. Create the table for Teachers (Updated for multiple subjects)
+-- 4. Create the table for Teachers (Updated for multiple subjects & photo)
 DROP TABLE IF EXISTS public.teachers;
 
 CREATE TABLE IF NOT EXISTS public.teachers (
@@ -39,6 +39,7 @@ CREATE TABLE IF NOT EXISTS public.teachers (
     email TEXT,
     subjects TEXT[], -- Array of strings for multiple subjects
     phone TEXT,
+    profile_photo_url TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
 );
 
@@ -49,12 +50,31 @@ ALTER TABLE public.teachers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.subjects ENABLE ROW LEVEL SECURITY;
 
 -- 6. Create policies that allow public access
+DROP POLICY IF EXISTS "Enable all access for weekly_schedules" ON public.weekly_schedules;
 CREATE POLICY "Enable all access for weekly_schedules" ON public.weekly_schedules FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Enable all access for classes" ON public.classes;
 CREATE POLICY "Enable all access for classes" ON public.classes FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Enable all access for teachers" ON public.teachers;
 CREATE POLICY "Enable all access for teachers" ON public.teachers FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Enable all access for subjects" ON public.subjects;
 CREATE POLICY "Enable all access for subjects" ON public.subjects FOR ALL USING (true) WITH CHECK (true);
 
--- 7. Insert default data
+-- 7. Storage Bucket Setup (Fix for 'Bucket not found')
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('teacher-avatars', 'teacher-avatars', true)
+ON CONFLICT (id) DO NOTHING;
+
+-- Storage Policies (Allow public read/write)
+DROP POLICY IF EXISTS "Public Access Avatar" ON storage.objects;
+CREATE POLICY "Public Access Avatar" ON storage.objects FOR SELECT USING ( bucket_id = 'teacher-avatars' );
+
+DROP POLICY IF EXISTS "Public Insert Avatar" ON storage.objects;
+CREATE POLICY "Public Insert Avatar" ON storage.objects FOR INSERT WITH CHECK ( bucket_id = 'teacher-avatars' );
+
+-- 8. Insert default data
 INSERT INTO public.classes (name) VALUES 
 ('Spring 2024'), 
 ('Fall 2023')
@@ -110,14 +130,21 @@ const SqlEditor: React.FC = () => {
     localStorage.setItem('supabase-sql-history', JSON.stringify(history));
   }, [history]);
 
-  const handleRun = () => {
-    // Mock execution
+  const handleRun = async () => {
+     // Mock execution if no supabase client, otherwise real execution would go here if we had an SQL API exposed
+     // Since this is a frontend-only demo connecting to supabase via client, we can't run raw SQL easily without
+     // a backend function or specific pg extension. 
+     // However, for the purpose of this "High Fidelity" UI, we are simulating the SQL editor.
+     // BUT, to actually fix the "Bucket not found" error, the user likely needs to run this in their REAL Supabase Dashboard.
+     
+     // Mock result for UI
     setResults([
-      { status: 'Success', message: 'Query executed successfully' },
-      { affected_rows: 1 }
+      { status: 'Success', message: 'Schema script prepared. Please run this in your Supabase Dashboard SQL Editor.' },
+      { note: 'Copy the SQL above and execute it in your database console to create the missing bucket.' }
     ]);
+    
     const newEntry: SqlHistory = { id: Date.now().toString(), query, timestamp: new Date() };
-    setHistory(prev => [newEntry, ...prev].slice(0, 50)); // Keep last 50 entries
+    setHistory(prev => [newEntry, ...prev].slice(0, 50));
   };
 
   const handleAiGenerate = async () => {
@@ -204,28 +231,20 @@ const SqlEditor: React.FC = () => {
                 </div>
                 <div className="flex-1 overflow-auto">
                     {results ? (
-                        <table className="w-full text-left border-collapse">
-                            <thead>
-                                <tr>
-                                    {Object.keys(results[0]).map(key => (
-                                        <th key={key} className="sticky top-0 bg-supabase-panel border-b border-supabase-border px-4 py-2 text-xs font-medium text-supabase-muted whitespace-nowrap">
-                                            {key}
-                                        </th>
-                                    ))}
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {results.map((row, idx) => (
-                                    <tr key={idx} className="hover:bg-supabase-hover/50 group">
-                                        {Object.values(row).map((val: any, i) => (
-                                            <td key={i} className="px-4 py-2 text-xs text-supabase-text border-b border-supabase-border font-mono whitespace-nowrap">
-                                                {val.toString()}
-                                            </td>
-                                        ))}
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
+                        <div className="p-4">
+                            {results.map((res, idx) => (
+                                <div key={idx} className="text-sm text-supabase-text mb-2 font-mono">
+                                    {res.message ? (
+                                        <div className="text-green-400">{res.message}</div>
+                                    ) : (
+                                        <pre>{JSON.stringify(res, null, 2)}</pre>
+                                    )}
+                                </div>
+                            ))}
+                             <div className="mt-4 p-3 bg-yellow-500/10 border border-yellow-500/20 rounded text-yellow-200 text-xs">
+                                 Note: This SQL editor is a simulation interface. To apply these changes (like creating the missing bucket), copy the SQL above and run it in your actual Supabase Dashboard SQL Editor.
+                             </div>
+                        </div>
                     ) : (
                         <div className="flex items-center justify-center h-full text-supabase-muted text-sm">
                             Run a query to see results

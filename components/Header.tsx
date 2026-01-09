@@ -68,14 +68,8 @@ const Header: React.FC<HeaderProps> = ({ currentView, onMenuToggle }) => {
             <Menu size={20} />
         </button>
 
-        <span className="hover:text-supabase-text cursor-pointer transition-colors hidden sm:block">Organization</span>
-        <ChevronRight size={16} className="mx-2 hidden sm:block" />
+        <span className="hover:text-supabase-text cursor-pointer transition-colors block truncate max-w-[150px] sm:max-w-none">Management System</span>
         
-        {/* Static Class Name */}
-        <span className="font-medium text-supabase-text hover:bg-supabase-hover px-2 py-1 rounded transition-colors cursor-default truncate max-w-[100px] sm:max-w-none">
-            {selectedClassId}
-        </span>
-
         <ChevronRight size={16} className="mx-2 flex-shrink-0" />
         <span className="text-supabase-muted font-normal truncate">{getBreadcrumb()}</span>
       </div>

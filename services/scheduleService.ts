@@ -25,6 +25,72 @@ const generateScheduleId = (): string => {
   return `UCS${d}${m}${y}`;
 };
 
+// Helper: Compress Image to under 50KB
+const compressImage = async (file: File): Promise<Blob> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = (event) => {
+      const img = new Image();
+      img.src = event.target?.result as string;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        // Max dimension for avatars (300px is sufficient for UI)
+        const MAX_WIDTH = 300; 
+        const MAX_HEIGHT = 300;
+        let width = img.width;
+        let height = img.height;
+
+        // Resize logic to maintain aspect ratio
+        if (width > height) {
+          if (width > MAX_WIDTH) {
+            height *= MAX_WIDTH / width;
+            width = MAX_WIDTH;
+          }
+        } else {
+          if (height > MAX_HEIGHT) {
+            width *= MAX_HEIGHT / height;
+            height = MAX_HEIGHT;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+            reject(new Error("Canvas context failed"));
+            return;
+        }
+        ctx.drawImage(img, 0, 0, width, height);
+
+        // Recursive compression function to target under 50KB
+        const attemptCompression = (quality: number) => {
+             canvas.toBlob((blob) => {
+                if (!blob) {
+                    reject(new Error("Compression failed"));
+                    return;
+                }
+                
+                // Check if under 50KB (50 * 1024 bytes) or quality is too low (stop at 0.1)
+                if (blob.size <= 50 * 1024 || quality <= 0.1) {
+                    console.log(`Image compressed. Original: ${(file.size/1024).toFixed(2)}KB, New: ${(blob.size/1024).toFixed(2)}KB, Quality: ${quality.toFixed(1)}`);
+                    resolve(blob);
+                } else {
+                    // Reduce quality by 0.1 and try again
+                    attemptCompression(Math.max(0.1, quality - 0.1));
+                }
+             }, 'image/jpeg', quality);
+        };
+
+        // Start with 0.9 quality
+        attemptCompression(0.9);
+      };
+      img.onerror = (err) => reject(err);
+    };
+    reader.onerror = (err) => reject(err);
+  });
+};
+
 // Local Storage Fallbacks
 const getLocalData = (classId: string): ClassSession[] => {
   if (!classId) return [];
@@ -123,6 +189,39 @@ export const scheduleService = {
     }
   },
 
+  async uploadTeacherPhoto(file: File): Promise<{success: boolean, url?: string, error?: string}> {
+      if (!supabase) return { success: false, error: 'No database connection' };
+      try {
+          // 1. Optimize Image
+          const compressedBlob = await compressImage(file);
+
+          // 2. Generate path
+          // Force .jpg extension because we converted to jpeg
+          const fileName = `${Math.random().toString(36).substring(2, 15)}_${Date.now()}.jpg`;
+          const filePath = `${fileName}`;
+
+          // 3. Upload to Supabase
+          const { error: uploadError } = await supabase.storage
+              .from('teacher-avatars')
+              .upload(filePath, compressedBlob, {
+                  contentType: 'image/jpeg',
+                  upsert: true
+              });
+
+          if (uploadError) throw uploadError;
+
+          // 4. Get Public URL
+          const { data } = supabase.storage
+              .from('teacher-avatars')
+              .getPublicUrl(filePath);
+
+          return { success: true, url: data.publicUrl };
+      } catch (e: any) {
+          console.error("Error uploading photo:", e.message);
+          return { success: false, error: e.message };
+      }
+  },
+
   async addTeacher(teacher: Omit<Teacher, 'id' | 'created_at'>): Promise<{success: boolean, error?: string}> {
       if (!supabase) return { success: false, error: 'No database connection' };
       try {
@@ -147,7 +246,8 @@ export const scheduleService = {
                   name: teacher.name,
                   email: teacher.email,
                   subjects: teacher.subjects,
-                  phone: teacher.phone
+                  phone: teacher.phone,
+                  profile_photo_url: teacher.profile_photo_url
               })
               .eq('id', teacher.id);
 

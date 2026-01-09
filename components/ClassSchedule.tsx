@@ -7,11 +7,11 @@ import { useToast } from '../context/ToastContext';
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const COLORS = [
-  'bg-blue-500/20 text-blue-300 border-blue-500/30',
-  'bg-purple-500/20 text-purple-300 border-purple-500/30',
-  'bg-green-500/20 text-green-300 border-green-500/30',
-  'bg-orange-500/20 text-orange-300 border-orange-500/30',
-  'bg-pink-500/20 text-pink-300 border-pink-500/30',
+  'bg-blue-50 dark:bg-blue-500/20 text-blue-900 dark:text-blue-300 border-blue-200 dark:border-blue-500/30',
+  'bg-purple-50 dark:bg-purple-500/20 text-purple-900 dark:text-purple-300 border-purple-200 dark:border-purple-500/30',
+  'bg-green-50 dark:bg-green-500/20 text-green-900 dark:text-green-300 border-green-200 dark:border-green-500/30',
+  'bg-orange-50 dark:bg-orange-500/20 text-orange-900 dark:text-orange-300 border-orange-200 dark:border-orange-500/30',
+  'bg-pink-50 dark:bg-pink-500/20 text-pink-900 dark:text-pink-300 border-pink-200 dark:border-pink-500/30',
 ];
 
 const DRAFT_PREFIX = 'supabase-schedule-draft-';
@@ -364,20 +364,20 @@ const ClassSchedule: React.FC = () => {
               <div className="sticky top-0 z-0 pb-2 bg-supabase-bg border-b-2 border-supabase-border">
                 <h3 className="font-medium text-supabase-text uppercase tracking-wider text-xs flex justify-between items-center">
                     {day}
-                    <span className="text-[10px] text-supabase-muted bg-supabase-panel px-1.5 py-0.5 rounded">{getClassesForDay(day).length}</span>
+                    <span className="text-[10px] text-supabase-muted bg-supabase-panel px-1.5 py-0.5 rounded border border-supabase-border">{getClassesForDay(day).length}</span>
                 </h3>
               </div>
               
               <div className="flex flex-col gap-3">
                 {getClassesForDay(day).length === 0 && (
-                    <div className="h-24 rounded-lg border border-dashed border-supabase-border flex items-center justify-center text-xs text-supabase-muted">
+                    <div className="h-24 rounded-lg border border-dashed border-supabase-border flex items-center justify-center text-xs text-supabase-muted bg-supabase-panel/30">
                         No classes
                     </div>
                 )}
                 {getClassesForDay(day).map(session => (
                   <div 
                     key={session.id} 
-                    className={`group relative p-4 rounded-lg border transition-all hover:shadow-lg ${session.color} border-opacity-50 bg-opacity-10 bg-supabase-panel hover:bg-opacity-20`}
+                    className={`group relative p-4 rounded-lg border transition-all hover:shadow-lg ${session.color} border-opacity-50 hover:bg-opacity-80`}
                   >
                     <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 flex gap-1 transition-opacity">
                       <button 
@@ -396,17 +396,19 @@ const ClassSchedule: React.FC = () => {
 
                     <div className="flex flex-col gap-1">
                         <div className="font-medium text-sm leading-tight pr-6">{session.title}</div>
+                        {/* Teacher Position */}
                         <div className="flex items-center gap-1.5 text-xs opacity-80 mt-1">
-                            <Clock size={12} />
-                            <span>{session.startTime} - {session.endTime}</span>
+                            <User size={12} />
+                            <span>{session.instructor}</span>
                         </div>
                         <div className="flex items-center gap-1.5 text-xs opacity-80">
                             <MapPin size={12} />
                             <span>{session.room}</span>
                         </div>
+                        {/* Time Position */}
                          <div className="flex items-center gap-1.5 text-xs opacity-80">
-                            <User size={12} />
-                            <span>{session.instructor}</span>
+                            <Clock size={12} />
+                            <span>{session.startTime} - {session.endTime}</span>
                         </div>
                     </div>
                   </div>

@@ -53,5 +53,6 @@ export interface Teacher {
   email: string;
   subjects: string[]; // Changed from department: string to support multiple
   phone?: string;
+  profile_photo_url?: string;
   created_at?: string;
 }
