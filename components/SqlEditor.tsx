@@ -8,8 +8,8 @@ DROP TABLE IF EXISTS public.weekly_schedules;
 
 CREATE TABLE IF NOT EXISTS public.weekly_schedules (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    schedule_id TEXT, -- Format: UCS+DDMMYY
-    class TEXT UNIQUE, 
+    schedule_id TEXT UNIQUE, -- Every version has a unique ID
+    class TEXT, -- Removed UNIQUE to allow multiple versions (Draft/Live)
     content JSONB,
     status TEXT DEFAULT 'false' CHECK (status IN ('true', 'false', 'recent')),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
@@ -99,7 +99,7 @@ VALUES (
   'Spring 2024', 
   '[{"id":"1","title":"Database Systems","instructor":"Dr. Smith","day":"Monday","startTime":"09:00","endTime":"10:30","room":"LH-101","color":"bg-blue-500/20 text-blue-300 border-blue-500/30"}]'::jsonb,
   'true'
-) ON CONFLICT (class) DO NOTHING;`;
+);`;
 
 const SqlEditor: React.FC = () => {
   const [query, setQuery] = useState(INITIAL_SCHEMA_SQL);
@@ -131,12 +131,6 @@ const SqlEditor: React.FC = () => {
   }, [history]);
 
   const handleRun = async () => {
-     // Mock execution if no supabase client, otherwise real execution would go here if we had an SQL API exposed
-     // Since this is a frontend-only demo connecting to supabase via client, we can't run raw SQL easily without
-     // a backend function or specific pg extension. 
-     // However, for the purpose of this "High Fidelity" UI, we are simulating the SQL editor.
-     // BUT, to actually fix the "Bucket not found" error, the user likely needs to run this in their REAL Supabase Dashboard.
-     
      // Mock result for UI
     setResults([
       { status: 'Success', message: 'Schema script prepared. Please run this in your Supabase Dashboard SQL Editor.' },

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Plus, Clock, MapPin, User, X, Edit2, Trash2, Calendar, Loader2, Cloud, Save, AlertCircle, ChevronDown, Check, AlertTriangle, UserCircle } from 'lucide-react';
+import { Plus, Clock, User, X, Edit2, Trash2, Calendar, Loader2, Cloud, Save, AlertCircle, ChevronDown, Check, AlertTriangle, UserCircle, MapPin } from 'lucide-react';
 import { ClassSession, Teacher } from '../types';
 import { scheduleService } from '../services/scheduleService';
 import { useClass } from '../context/ClassContext';
@@ -21,7 +21,7 @@ interface ExtendedClassSession extends ClassSession {
 }
 
 const ClassSchedule: React.FC = () => {
-  const { selectedClassId, setSelectedClassId, availableClasses, addClass } = useClass();
+  const { selectedClassId, setSelectedClassId, availableClasses, addClass, selectedClass } = useClass();
   const [schedule, setSchedule] = useState<ExtendedClassSession[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -137,7 +137,7 @@ const ClassSchedule: React.FC = () => {
         day: 'Monday',
         startTime: '09:00',
         endTime: '10:00',
-        room: '',
+        room: selectedClass?.room_no || '',
         color: COLORS[Math.floor(Math.random() * COLORS.length)],
         show_profiles: true
       });
@@ -151,14 +151,14 @@ const ClassSchedule: React.FC = () => {
       let updated;
       if (editingId) {
         updated = prevSchedule.map(item => 
-          item.id === editingId ? { ...item, ...formData } as ExtendedClassSession : item
+          item.id === editingId ? { ...item, ...formData, room: selectedClass?.room_no || item.room } as ExtendedClassSession : item
         );
       } else {
         const newSession = {
           ...formData as ExtendedClassSession,
+          room: selectedClass?.room_no || '',
           id: Date.now().toString()
         };
-        // Explicitly append to prevSchedule
         updated = [...prevSchedule, newSession];
       }
       return updated;
@@ -186,11 +186,13 @@ const ClassSchedule: React.FC = () => {
   };
 
   const handleCreateProject = () => {
-    const name = prompt("Enter new project/schedule name:");
+    const name = prompt("Enter new class name:");
+    const section = prompt("Enter section (e.g., A, B):") || 'A';
+    const room = prompt("Enter room number:") || '0';
     if (name) {
-      addClass(name);
+      addClass(name, section, room);
       setIsClassMenuOpen(false);
-      showToast(`Project '${name}' created`, "success");
+      showToast(`Class '${name}' created`, "success");
     }
   };
 
@@ -208,7 +210,7 @@ const ClassSchedule: React.FC = () => {
   if (!selectedClassId) {
     return (
         <div className="h-full flex flex-col items-center justify-center text-supabase-muted gap-3">
-             <p className="text-sm">Please select a project/class to view schedule.</p>
+             <p className="text-sm">Please select a class to view schedule.</p>
         </div>
     )
   }
@@ -228,7 +230,7 @@ const ClassSchedule: React.FC = () => {
         <div className="flex items-center gap-4">
             <div className="flex items-center gap-3">
                 <Calendar className="text-supabase-green" size={20} />
-                <h1 className="text-base font-medium hidden md:block">Class Schedule</h1>
+                <h1 className="text-base font-medium hidden lg:block">Class Schedule</h1>
                 <span className="text-xs text-supabase-muted bg-supabase-sidebar px-2 py-0.5 rounded border border-supabase-border">
                     {schedule.length} Sessions
                 </span>
@@ -257,25 +259,36 @@ const ClassSchedule: React.FC = () => {
             <div className="relative border-l border-supabase-border pl-4" ref={classDropdownRef}>
                 <button 
                     onClick={() => setIsClassMenuOpen(!isClassMenuOpen)}
-                    className="flex items-center gap-2 hover:bg-supabase-hover px-2 py-1 rounded transition-colors text-supabase-text"
+                    className="flex flex-col items-start hover:bg-supabase-hover px-2 py-1 rounded transition-colors text-supabase-text group"
                 >
-                    <span className="font-medium max-w-[100px] sm:max-w-[150px] truncate">{selectedClassId}</span>
-                    <ChevronDown size={14} className="text-supabase-muted" />
+                    <div className="flex items-center gap-2">
+                        <span className="font-bold text-sm max-w-[120px] sm:max-w-[200px] truncate">{selectedClassId}</span>
+                        <ChevronDown size={14} className="text-supabase-muted group-hover:text-supabase-text" />
+                    </div>
+                    {selectedClass && (
+                        <div className="flex items-center gap-2 text-[10px] text-supabase-muted -mt-0.5">
+                            <span className="bg-supabase-green/10 text-supabase-green px-1 rounded">Sec: {selectedClass.section}</span>
+                            <span className="flex items-center gap-0.5"><MapPin size={10} /> Room: {selectedClass.room_no}</span>
+                        </div>
+                    )}
                 </button>
                 
                 {isClassMenuOpen && (
-                    <div className="absolute top-full left-4 mt-1 w-56 bg-supabase-panel border border-supabase-border rounded-lg shadow-xl py-1 z-50 animate-in fade-in zoom-in-95 duration-100">
+                    <div className="absolute top-full left-4 mt-1 w-64 bg-supabase-panel border border-supabase-border rounded-lg shadow-xl py-1 z-50 animate-in fade-in zoom-in-95 duration-100">
                         <div className="px-3 py-2 text-xs font-semibold text-supabase-muted border-b border-supabase-border mb-1 uppercase tracking-wider">
-                            Switch Project
+                            Switch Class
                         </div>
                         {availableClasses.map(cls => (
                             <button 
-                                key={cls}
-                                onClick={() => { setSelectedClassId(cls); setIsClassMenuOpen(false); }}
+                                key={cls.id}
+                                onClick={() => { setSelectedClassId(cls.name); setIsClassMenuOpen(false); }}
                                 className="w-full text-left px-3 py-2 text-sm text-supabase-muted hover:text-supabase-text hover:bg-supabase-hover flex items-center justify-between transition-colors"
                             >
-                                {cls}
-                                {selectedClassId === cls && <Check size={14} className="text-supabase-green" />}
+                                <div className="flex flex-col">
+                                    <span className="font-medium">{cls.name}</span>
+                                    <span className="text-[10px] opacity-70">Sec: {cls.section} • Room: {cls.room_no}</span>
+                                </div>
+                                {selectedClassId === cls.name && <Check size={14} className="text-supabase-green" />}
                             </button>
                         ))}
                         <div className="border-t border-supabase-border mt-1 pt-1">
@@ -284,7 +297,7 @@ const ClassSchedule: React.FC = () => {
                             className="w-full text-left px-3 py-2 text-sm text-supabase-muted hover:text-supabase-text hover:bg-supabase-hover transition-colors flex items-center gap-2"
                             >
                                 <Plus size={14} />
-                                Create Project
+                                New Class Profile
                             </button>
                         </div>
                     </div>
@@ -311,7 +324,7 @@ const ClassSchedule: React.FC = () => {
             className="bg-supabase-green text-black px-3 sm:px-4 py-1.5 rounded-md text-sm font-medium hover:bg-supabase-greenHover transition-colors flex items-center gap-2"
             >
             <Plus size={16} fill="currentColor" />
-            <span className="hidden sm:inline">Add Class</span>
+            <span className="hidden sm:inline">Add Session</span>
             </button>
         </div>
       </div>
@@ -364,14 +377,16 @@ const ClassSchedule: React.FC = () => {
                             <User size={12} />
                             <span>{session.instructor}</span>
                         </div>
-                        <div className="flex items-center gap-1.5 text-xs opacity-80">
-                            <MapPin size={12} />
-                            <span>{session.room}</span>
-                        </div>
                          <div className="flex items-center gap-1.5 text-xs opacity-80">
                             <Clock size={12} />
                             <span>{session.startTime} - {session.endTime}</span>
                         </div>
+                        {(session.room || selectedClass?.room_no) && (
+                             <div className="flex items-center gap-1.5 text-[10px] opacity-70 mt-1 italic">
+                                <MapPin size={10} />
+                                <span>Room {session.room || selectedClass?.room_no}</span>
+                            </div>
+                        )}
                     </div>
                   </div>
                 ))}
@@ -383,10 +398,10 @@ const ClassSchedule: React.FC = () => {
 
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-          <div className="bg-supabase-panel border border-supabase-border rounded-lg shadow-2xl w-full max-w-md overflow-hidden">
+          <div className="bg-supabase-panel border border-supabase-border rounded-lg shadow-2xl w-full max-md overflow-hidden">
             <div className="flex items-center justify-between px-6 py-4 border-b border-supabase-border bg-supabase-sidebar">
               <h2 className="text-sm font-semibold text-supabase-text">
-                {editingId ? 'Edit Class' : 'Add New Class'}
+                {editingId ? 'Edit Session' : 'Add New Session'}
               </h2>
               <button onClick={() => setIsModalOpen(false)} className="text-supabase-muted hover:text-supabase-text">
                 <X size={18} />
@@ -438,18 +453,6 @@ const ClassSchedule: React.FC = () => {
                         ))}
                     </select>
                 </div>
-
-              <div className="space-y-1.5">
-                    <label className="text-xs font-medium text-supabase-muted">Room</label>
-                    <input 
-                      type="text" 
-                      required
-                      value={formData.room}
-                      onChange={e => setFormData({...formData, room: e.target.value})}
-                      className="w-full bg-supabase-bg border border-supabase-border rounded px-3 py-2 text-sm text-supabase-text focus:outline-none focus:border-supabase-green"
-                      placeholder="e.g. 101"
-                    />
-              </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
@@ -506,7 +509,7 @@ const ClassSchedule: React.FC = () => {
                   type="submit"
                   className="bg-supabase-green text-black px-4 py-2 rounded text-sm font-medium hover:bg-supabase-greenHover transition-colors flex items-center gap-2"
                 >
-                  {editingId ? 'Update Class' : 'Create Class'}
+                  {editingId ? 'Update Session' : 'Create Session'}
                 </button>
               </div>
             </form>
@@ -553,7 +556,7 @@ const ClassSchedule: React.FC = () => {
                                onClick={confirmDelete}
                                className="bg-red-500/10 text-red-500 border border-red-500/50 px-4 py-2 rounded text-sm font-medium hover:bg-red-500/20 transition-colors"
                            >
-                               Remove Class
+                               Remove Session
                            </button>
                        </div>
                    </div>

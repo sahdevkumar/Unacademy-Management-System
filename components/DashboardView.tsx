@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { MetricData, ClassSession } from '../types';
+import { MetricData, ClassSession, ClassInfo } from '../types';
 import { Activity, Database, Server, CheckCircle2, Clock, MapPin, User, Calendar, Cloud, MonitorPlay } from 'lucide-react';
 import { scheduleService } from '../services/scheduleService';
 import { supabase } from '../services/supabaseClient';
@@ -49,6 +49,7 @@ const Stat: React.FC<{ label: string; value: string; icon: React.ReactNode; sub?
 const DashboardView: React.FC = () => {
   const [publishedSchedules, setPublishedSchedules] = useState<PublishedSchedule[]>([]);
   const [selectedScheduleId, setSelectedScheduleId] = useState<string | null>(null);
+  const [classesInfo, setClassesInfo] = useState<ClassInfo[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [stats, setStats] = useState({
@@ -69,6 +70,10 @@ const DashboardView: React.FC = () => {
           if (published.length > 0) {
               setSelectedScheduleId(published[0].id);
           }
+          
+          const infos = await scheduleService.getClasses();
+          setClassesInfo(infos);
+
           if (supabase) {
               const { count: activeCount } = await supabase.from('weekly_schedules').select('*', { count: 'exact', head: true }).eq('status', 'true');
               const { count: draftCount } = await supabase.from('weekly_schedules').select('*', { count: 'exact', head: true }).eq('status', 'false');
@@ -90,6 +95,7 @@ const DashboardView: React.FC = () => {
   };
 
   const currentSchedule = publishedSchedules.find(s => s.id === selectedScheduleId);
+  const currentClassMetadata = classesInfo.find(c => c.name === currentSchedule?.class);
 
   return (
     <div className="p-4 md:p-8 max-w-[1600px] mx-auto space-y-6 h-full flex flex-col">
@@ -169,34 +175,37 @@ const DashboardView: React.FC = () => {
                                     {classes.length === 0 && (
                                         <div className={`h-24 rounded-lg border border-dashed ${theme.wrapper} flex items-center justify-center group overflow-hidden relative`}>
                                             <div className={`absolute inset-0 ${theme.overlay} opacity-0 group-hover:opacity-100 transition-opacity`}></div>
-                                            <span className={`text-lg font-bold ${theme.text} tracking-wide select-none animate-pulse`}>Comming Soon..</span>
+                                            <span className={`text-lg font-bold ${theme.text} tracking-wide select-none animate-pulse`}>Coming Soon..</span>
                                         </div>
                                     )}
-                                    {classes.map(session => (
-                                        <div key={session.id} className={`p-3 rounded-lg border ${session.color ? session.color.split(' ').filter(c => c.startsWith('border') || c.startsWith('bg-')).join(' ') : ''} border-opacity-40 bg-opacity-5 dark:bg-opacity-10 bg-supabase-panel hover:bg-opacity-10 transition-colors`}>
-                                            <div className="flex flex-col gap-1.5">
-                                                <div className="flex items-center justify-between gap-2">
-                                                    <div className={`font-medium text-sm leading-tight truncate ${session.color ? session.color.split(' ').find(c => c.startsWith('text')) || 'text-supabase-text' : 'text-supabase-text'}`}>{session.title}</div>
-                                                    {/* Profile picture control: Only show if show_profiles is explicitly true */}
-                                                    <div className="w-6 h-6 rounded-full border border-current border-opacity-20 overflow-hidden shrink-0 flex items-center justify-center bg-supabase-sidebar">
-                                                        {session.instructorPhotoUrl && session.show_profiles === true ? (
-                                                            <img src={session.instructorPhotoUrl} alt="" className="w-full h-full object-cover" />
-                                                        ) : (
-                                                            <User size={12} className="text-supabase-muted" />
-                                                        )}
+                                    {classes.map(session => {
+                                        // Fallback to class room_no if session.room is empty
+                                        const displayRoom = session.room || currentClassMetadata?.room_no || 'N/A';
+                                        return (
+                                            <div key={session.id} className={`p-3 rounded-lg border ${session.color ? session.color.split(' ').filter(c => c.startsWith('border') || c.startsWith('bg-')).join(' ') : ''} border-opacity-40 bg-opacity-5 dark:bg-opacity-10 bg-supabase-panel hover:bg-opacity-10 transition-colors`}>
+                                                <div className="flex flex-col gap-1.5">
+                                                    <div className="flex items-center justify-between gap-2">
+                                                        <div className={`font-medium text-sm leading-tight truncate ${session.color ? session.color.split(' ').find(c => c.startsWith('text')) || 'text-supabase-text' : 'text-supabase-text'}`}>{session.title}</div>
+                                                        <div className="w-6 h-6 rounded-full border border-current border-opacity-20 overflow-hidden shrink-0 flex items-center justify-center bg-supabase-sidebar">
+                                                            {session.instructorPhotoUrl && session.show_profiles === true ? (
+                                                                <img src={session.instructorPhotoUrl} alt="" className="w-full h-full object-cover" />
+                                                            ) : (
+                                                                <User size={12} className="text-supabase-muted" />
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex items-center gap-2 text-xs opacity-70 text-supabase-muted">
+                                                        <div className={`w-1.5 h-1.5 rounded-full ${session.instructorStatus === 'active' ? 'bg-supabase-green' : 'bg-red-500'}`}></div>
+                                                        <span className="truncate">{session.instructor}</span>
+                                                    </div>
+                                                    <div className="flex items-center justify-between text-xs opacity-70 pt-1 border-t border-current border-opacity-20 mt-1 text-supabase-muted">
+                                                         <div className="flex items-center gap-1.5"><MapPin size={12} /><span>{displayRoom}</span></div>
+                                                         <div className="flex items-center gap-1.5"><Clock size={12} /><span>{session.startTime}</span></div>
                                                     </div>
                                                 </div>
-                                                <div className="flex items-center gap-2 text-xs opacity-70 text-supabase-muted">
-                                                    <div className={`w-1.5 h-1.5 rounded-full ${session.instructorStatus === 'active' ? 'bg-supabase-green' : 'bg-red-500'}`}></div>
-                                                    <span className="truncate">{session.instructor}</span>
-                                                </div>
-                                                <div className="flex items-center justify-between text-xs opacity-70 pt-1 border-t border-current border-opacity-20 mt-1 text-supabase-muted">
-                                                     <div className="flex items-center gap-1.5"><MapPin size={12} /><span>{session.room}</span></div>
-                                                     <div className="flex items-center gap-1.5"><Clock size={12} /><span>{session.startTime}</span></div>
-                                                </div>
                                             </div>
-                                        </div>
-                                    ))}
+                                        );
+                                    })}
                                 </div>
                             </div>
                         );
@@ -206,7 +215,12 @@ const DashboardView: React.FC = () => {
           </div>
           {currentSchedule && (
               <div className="bg-supabase-sidebar border-t border-supabase-border px-6 py-2 text-xs text-supabase-muted flex justify-between">
-                  <div>ID: <span className="font-mono">{currentSchedule.id}</span></div>
+                  <div className="flex gap-4">
+                      <div>ID: <span className="font-mono">{currentSchedule.id}</span></div>
+                      {currentClassMetadata && (
+                          <div className="text-supabase-green font-medium">Section: {currentClassMetadata.section} • Room: {currentClassMetadata.room_no}</div>
+                      )}
+                  </div>
                   <div>Last Updated: {new Date(currentSchedule.updated_at).toLocaleString()}</div>
               </div>
           )}

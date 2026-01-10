@@ -49,6 +49,13 @@ export interface ClassSession {
   color: string;
 }
 
+export interface ClassInfo {
+  id: string;
+  name: string;
+  section: string;
+  room_no: string;
+}
+
 export interface Teacher {
   id: string;
   name: string;

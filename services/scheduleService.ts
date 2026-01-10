@@ -1,4 +1,4 @@
-import { ClassSession, Teacher } from '../types';
+import { ClassSession, Teacher, ClassInfo } from '../types';
 import { supabase } from './supabaseClient';
 
 const DB_KEY_PREFIX = 'supabase-class-schedule-';
@@ -16,7 +16,11 @@ const generateScheduleId = (): string => {
   const d = String(date.getDate()).padStart(2, '0');
   const m = String(date.getMonth() + 1).padStart(2, '0');
   const y = String(date.getFullYear()).slice(-2);
-  return `UCS${d}${m}${y}`;
+  const h = String(date.getHours()).padStart(2, '0');
+  const min = String(date.getMinutes()).padStart(2, '0');
+  const sec = String(date.getSeconds()).padStart(2, '0');
+  const ms = String(date.getMilliseconds()).padStart(3, '0');
+  return `UCS${d}${m}${y}${h}${min}${sec}${ms}`;
 };
 
 const compressImage = async (file: File): Promise<Blob> => {
@@ -67,18 +71,18 @@ const compressImage = async (file: File): Promise<Blob> => {
 };
 
 export const scheduleService = {
-  async getClasses(): Promise<string[]> {
+  async getClasses(): Promise<ClassInfo[]> {
     if (!supabase) return [];
     try {
-        const { data, error } = await supabase.from('classes').select('name').order('name', { ascending: true });
+        const { data, error } = await supabase.from('classes').select('id, name, section, room_no').order('name', { ascending: true });
         if (error) return [];
-        return data ? data.map((row: any) => row.name) : [];
+        return (data || []) as ClassInfo[];
     } catch { return []; }
   },
 
-  async createClass(className: string): Promise<void> {
+  async createClass(className: string, section: string = 'A', roomNo: string = '0'): Promise<void> {
      if (supabase) {
-        try { await supabase.from('classes').insert([{ name: className }]); } catch {}
+        try { await supabase.from('classes').insert([{ name: className, section, room_no: roomNo }]); } catch {}
      }
   },
 
@@ -151,11 +155,22 @@ export const scheduleService = {
     if (!className) return [];
     if (supabase) {
       try {
-        const { data, error } = await supabase.from('weekly_schedules').select('content').eq('class', className).order('updated_at', { ascending: false }).limit(1).single();
+        const { data, error } = await supabase
+            .from('weekly_schedules')
+            .select('content')
+            .eq('class', className)
+            .eq('status', 'false') 
+            .order('updated_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
         if (!error && data && data.content) {
             return (Array.isArray(data.content) ? data.content : []) as ClassSession[];
         }
-      } catch {}
+        return [];
+      } catch {
+        return [];
+      }
     }
     await delay(300);
     const local = localStorage.getItem(DB_KEY_PREFIX + className.replace(/\s+/g, '-').toLowerCase());
@@ -182,79 +197,66 @@ export const scheduleService = {
 
   async save(className: string, schedule: ClassSession[]): Promise<void> {
     if (!className || !Array.isArray(schedule)) return;
-    const scheduleId = generateScheduleId();
-
+    
     if (supabase) {
       try {
         const teachers = await this.getTeachers();
         
+        const { data: classMeta } = await supabase
+            .from('classes')
+            .select('room_no')
+            .eq('name', className)
+            .maybeSingle();
+
         const enrichedSchedule = schedule.map(session => {
             const t = teachers.find(teach => teach.name === session.instructor);
-            const status = t?.status || 'active';
-            const currentShowProfiles = (session as any).show_profiles === true;
-
+            // Priority: session.room (override) -> classMeta.room_no (default) -> 'N/A'
+            const finalRoom = session.room || classMeta?.room_no || 'N/A';
+            
             return {
                 ...session,
                 instructorPhotoUrl: t?.profile_photo_url || session.instructorPhotoUrl,
-                instructorStatus: status,
-                show_profiles: currentShowProfiles
+                instructorStatus: t?.status || 'active',
+                room: finalRoom,
+                show_profiles: (session as any).show_profiles !== false
             };
         });
 
-        // Check the status of the most recent record for this class
-        const { data: current, error: fetchError } = await supabase
+        const { data: existingRows } = await supabase
             .from('weekly_schedules')
             .select('id, status')
-            .eq('class', className)
-            .order('updated_at', { ascending: false })
-            .limit(1)
-            .maybeSingle();
+            .eq('class', className);
 
-        const status = current?.status || 'false';
+        if (existingRows && existingRows.length > 0) {
+            const targetId = existingRows.find(r => r.status === 'true')?.id || existingRows[0].id;
 
-        if (status === 'true') {
-            // IF TRUE: ADD NEW ROW
-            // To avoid unique constraint conflicts on the 'class' column (if one exists), 
-            // we'll update the old one's class name slightly or handle status.
-            // But per request: "add new row". 
-            // We assume the schema allows multiple rows per class name or we archive the old one.
-            
-            // ARCHIVE OLD: Set previous 'true' records for this class to 'recent'
-            await supabase
+            const { error: updateError } = await supabase
                 .from('weekly_schedules')
-                .update({ status: 'recent' })
-                .eq('class', className)
-                .eq('status', 'true');
-
-            // INSERT NEW
+                .update({
+                    content: enrichedSchedule,
+                    updated_at: new Date().toISOString()
+                })
+                .eq('id', targetId);
+            
+            if (updateError) throw updateError;
+        } else {
+            const newScheduleId = generateScheduleId();
             const { error: insertError } = await supabase
                 .from('weekly_schedules')
                 .insert({
                     class: className,
-                    schedule_id: scheduleId,
-                    content: enrichedSchedule,
-                    status: 'false', // Default new row to draft
-                    updated_at: new Date().toISOString()
-                });
-            if (insertError) throw insertError;
-        } else {
-            // IF FALSE (OR DOESN'T EXIST): UPDATE OLD (UPSERT)
-            const { error: upsertError } = await supabase
-                .from('weekly_schedules')
-                .upsert({
-                    class: className,
-                    schedule_id: scheduleId,
+                    schedule_id: newScheduleId,
                     content: enrichedSchedule,
                     status: 'false',
                     updated_at: new Date().toISOString()
-                }, { onConflict: 'class' });
-            if (upsertError) throw upsertError;
+                });
+            
+            if (insertError) throw insertError;
         }
-
-        return;
-      } catch (e) { console.warn('Supabase save failed:', e); }
+      } catch (e) { 
+        console.warn('Supabase save failed:', e); 
+        throw e;
+      }
     }
-    await delay(400);
-    localStorage.setItem(DB_KEY_PREFIX + className.replace(/\s+/g, '-').toLowerCase(), JSON.stringify(schedule));
   }
 };

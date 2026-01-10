@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Monitor, Clock, MapPin, User, Loader2, Calendar, Edit2, Plus, X, Save, Trash2, Check, UserCircle } from 'lucide-react';
-import { ClassSession, Teacher } from '../types';
+import { Monitor, Clock, User, Loader2, Calendar, Edit2, Plus, X, Save, Trash2, Check, UserCircle, MapPin } from 'lucide-react';
+import { ClassSession, Teacher, ClassInfo } from '../types';
 import { scheduleService } from '../services/scheduleService';
 import { useToast } from '../context/ToastContext';
 
@@ -45,6 +45,7 @@ const LiveScheduleView: React.FC = () => {
     const [isSaving, setIsSaving] = useState(false);
     const [availableSubjects, setAvailableSubjects] = useState<{id: string, name: string}[]>([]);
     const [availableTeachers, setAvailableTeachers] = useState<Teacher[]>([]);
+    const [allClassesInfo, setAllClassesInfo] = useState<ClassInfo[]>([]);
 
     const [formData, setFormData] = useState<Partial<ExtendedClassSession>>({
         title: '',
@@ -59,12 +60,17 @@ const LiveScheduleView: React.FC = () => {
 
     const fetchSchedules = async () => {
         setLoading(true);
-        const data = await scheduleService.getPublished();
-        setSchedules(data as PublishedSchedule[]);
-        if (data.length > 0 && !selectedId) {
-            setSelectedId(data[0].id);
+        try {
+            const data = await scheduleService.getPublished();
+            setSchedules(data as PublishedSchedule[]);
+            if (data.length > 0 && !selectedId) {
+                setSelectedId(data[0].id);
+            }
+        } catch (error) {
+            console.error("Fetch schedules error:", error);
+        } finally {
+            setLoading(false);
         }
-        setLoading(false);
     };
 
     useEffect(() => {
@@ -74,11 +80,14 @@ const LiveScheduleView: React.FC = () => {
             setAvailableSubjects(subs);
             const teachers = await scheduleService.getTeachers();
             setAvailableTeachers(teachers);
+            const classes = await scheduleService.getClasses();
+            setAllClassesInfo(classes);
         };
         fetchLists();
     }, []);
 
     const currentSchedule = schedules.find(s => s.id === selectedId);
+    const currentClassInfo = allClassesInfo.find(c => c.name === currentSchedule?.class);
 
     const getClassesForDay = (day: string) => {
         if (!currentSchedule) return [];
@@ -91,6 +100,7 @@ const LiveScheduleView: React.FC = () => {
         setEditingSessionId(session.id);
         setFormData({
             ...session,
+            room: session.room || currentClassInfo?.room_no || '',
             show_profiles: session.show_profiles !== undefined ? session.show_profiles : true
         });
         setIsModalOpen(true);
@@ -104,7 +114,7 @@ const LiveScheduleView: React.FC = () => {
             day: day,
             startTime: '09:00',
             endTime: '10:00',
-            room: '',
+            room: currentClassInfo?.room_no || '',
             color: COLORS[Math.floor(Math.random() * COLORS.length)],
             show_profiles: true
         });
@@ -114,33 +124,57 @@ const LiveScheduleView: React.FC = () => {
     const handleSave = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!currentSchedule) return;
+        
         setIsSaving(true);
         try {
+            const targetClassName = currentSchedule.class;
             let newContent = [...currentSchedule.content];
+            
+            const sessionData = { 
+                ...formData, 
+                room: formData.room || '' 
+            } as ExtendedClassSession;
+
             if (editingSessionId) {
-                newContent = newContent.map(item => item.id === editingSessionId ? { ...item, ...formData } as ExtendedClassSession : item);
+                newContent = newContent.map(item => item.id === editingSessionId ? { ...item, ...sessionData } : item);
             } else {
-                const newSession = { ...formData as ExtendedClassSession, id: Date.now().toString() };
+                const newSession = { ...sessionData, id: Date.now().toString() };
                 newContent.push(newSession);
             }
-            await scheduleService.save(currentSchedule.class, newContent as ClassSession[]);
+
+            await scheduleService.save(targetClassName, newContent as ClassSession[]);
             await fetchSchedules();
+            
             setIsModalOpen(false);
             showToast(editingSessionId ? "Class updated successfully" : "Class added successfully", "success");
-        } catch (error) { showToast("Failed to save changes", "error"); } finally { setIsSaving(false); }
+        } catch (error) { 
+            console.error("Save error:", error);
+            showToast("Failed to save changes to database", "error"); 
+        } finally { 
+            setIsSaving(false); 
+        }
     };
 
     const handleDelete = async () => {
         if (!currentSchedule || !editingSessionId) return;
         if (!confirm("Are you sure you want to delete this class?")) return;
+        
         setIsSaving(true);
         try {
+            const targetClassName = currentSchedule.class;
             const newContent = currentSchedule.content.filter(item => item.id !== editingSessionId);
-            await scheduleService.save(currentSchedule.class, newContent as ClassSession[]);
+            
+            await scheduleService.save(targetClassName, newContent as ClassSession[]);
             await fetchSchedules();
+            
             setIsModalOpen(false);
             showToast("Class deleted successfully", "success");
-        } catch (error) { showToast("Failed to delete class", "error"); } finally { setIsSaving(false); }
+        } catch (error) { 
+            console.error("Delete error:", error);
+            showToast("Failed to delete class", "error"); 
+        } finally { 
+            setIsSaving(false); 
+        }
     };
 
     const filteredTeachers = availableTeachers.filter(teacher => 
@@ -214,15 +248,22 @@ const LiveScheduleView: React.FC = () => {
                                 <div className="flex flex-col gap-3">
                                     {count === 0 && (
                                         <div className={`h-28 rounded-lg border-2 border-dashed ${theme.border} ${theme.bg} flex flex-col items-center justify-center p-2 text-center group relative`}>
-                                            <span className={`text-sm md:text-base font-bold ${theme.text} opacity-80 tracking-wide break-words mb-2`}>Comming Soon..</span>
+                                            <span className={`text-sm md:text-base font-bold ${theme.text} opacity-80 tracking-wide break-words mb-2`}>Coming Soon..</span>
                                             <button onClick={() => handleAddClick(day)} className={`w-8 h-8 rounded-full border ${theme.border} ${theme.text} flex items-center justify-center hover:bg-white/10 transition-colors cursor-pointer`}><Plus size={16} /></button>
                                         </div>
                                     )}
 
                                     {dayClasses.map(session => (
-                                        <div key={session.id} className={`rounded-lg p-3 border bg-supabase-panel relative group overflow-hidden transition-transform hover:-translate-y-1 hover:shadow-lg ${theme.glow} ${session.color ? session.color.split(' ').filter(c => c.startsWith('border')).join(' ') : theme.border}`}>
+                                        <div key={session.id} className={`rounded-lg p-3 border bg-supabase-panel relative group overflow-hidden transition-all hover:-translate-y-1 hover:shadow-lg ${theme.glow} ${session.color ? session.color.split(' ').filter(c => c.startsWith('border')).join(' ') : theme.border}`}>
                                             <div className={`absolute top-0 left-0 w-1 h-full ${session.color ? session.color.split(' ')[0] : theme.bg} opacity-50`}></div>
-                                            <button onClick={(e) => { e.stopPropagation(); handleEditClick(session); }} className="absolute top-2 right-2 p-1.5 rounded bg-black/30 text-white opacity-0 group-hover:opacity-100 hover:bg-black/50 transition-all z-10"><Edit2 size={12} /></button>
+                                            
+                                            {/* Edit Button - Improved hover trigger and visibility */}
+                                            <button 
+                                                onClick={(e) => { e.stopPropagation(); handleEditClick(session); }} 
+                                                className="absolute top-2 right-2 p-1.5 rounded-md bg-supabase-sidebar border border-supabase-border text-supabase-text opacity-0 group-hover:opacity-100 hover:bg-supabase-green/10 hover:border-supabase-green hover:text-supabase-green transition-all z-20 shadow-sm transform hover:scale-110"
+                                            >
+                                                <Edit2 size={12} />
+                                            </button>
 
                                             <div className="flex gap-3 items-start relative z-10">
                                                 <div className="shrink-0 relative">
@@ -245,11 +286,11 @@ const LiveScheduleView: React.FC = () => {
                                                     </div>
                                                     <div className="text-[10px] md:text-xs text-supabase-muted truncate font-medium mb-1.5 flex items-center gap-1">
                                                         {session.instructor}
-                                                        {session.instructorStatus === 'inactive' && <span className="text-[8px] px-1 bg-red-500/20 text-red-400 rounded">Offline</span>}
+                                                        {session.instructorStatus === 'inactive' && <span className="text-[8px] bg-red-500/20 text-red-400 rounded">Offline</span>}
                                                     </div>
                                                     <div className="flex flex-col gap-1 pt-1.5 border-t border-supabase-border/50">
-                                                        <div className="flex items-center gap-1.5 text-[10px] text-supabase-muted overflow-hidden"><MapPin size={10} className="shrink-0" /><span className="truncate">{session.room}</span></div>
                                                         <div className="flex items-center gap-1.5 text-[10px] text-supabase-muted overflow-hidden"><Clock size={10} className="shrink-0" /><span className="font-mono truncate">{session.startTime} - {session.endTime}</span></div>
+                                                        <div className="flex items-center gap-1.5 text-[10px] text-supabase-muted overflow-hidden"><MapPin size={10} className="shrink-0" /><span className="truncate">Room: {session.room || currentClassInfo?.room_no || 'N/A'}</span></div>
                                                     </div>
                                                 </div>
                                             </div>
@@ -315,11 +356,19 @@ const LiveScheduleView: React.FC = () => {
                             </div>
 
                             <div className="space-y-1.5">
-                                <label className="text-xs font-medium text-supabase-muted">Room</label>
-                                <input type="text" required value={formData.room} onChange={e => setFormData({...formData, room: e.target.value})} className="w-full bg-supabase-bg border border-supabase-border rounded px-3 py-2 text-sm text-supabase-text focus:outline-none focus:border-supabase-green" placeholder="e.g. 101" />
+                                <label className="text-xs font-medium text-supabase-muted uppercase tracking-wider flex items-center gap-1.5">
+                                    <MapPin size={12} /> Room Number Override
+                                </label>
+                                <input 
+                                    type="text" 
+                                    value={formData.room} 
+                                    placeholder={currentClassInfo?.room_no || "Room number..."}
+                                    onChange={e => setFormData({...formData, room: e.target.value})} 
+                                    className="w-full bg-supabase-bg border border-supabase-border rounded px-3 py-2 text-sm text-supabase-text focus:outline-none focus:border-supabase-green" 
+                                />
+                                <p className="text-[10px] text-supabase-muted italic">Leave blank to use class default: {currentClassInfo?.room_no || 'None'}</p>
                             </div>
 
-                            {/* Profile Toggle Switch */}
                             <div className="pt-2">
                                 <button 
                                     type="button"
@@ -335,7 +384,7 @@ const LiveScheduleView: React.FC = () => {
                                         <span className="text-xs font-medium">Show Profile Picture</span>
                                     </div>
                                     <div className={`w-8 h-4 rounded-full relative transition-colors ${formData.show_profiles ? 'bg-supabase-green' : 'bg-supabase-muted'}`}>
-                                        <div className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all ${formData.show_profiles ? 'translate-x-4' : 'translate-x-0.5'}`}></div>
+                                        <div className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all transform ${formData.show_profiles ? 'translate-x-4' : 'translate-x-0.5'}`}></div>
                                     </div>
                                 </button>
                             </div>
@@ -348,8 +397,9 @@ const LiveScheduleView: React.FC = () => {
                                 )}
                                 <div className="flex gap-2 ml-auto">
                                     <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-sm text-supabase-muted">Cancel</button>
-                                    <button type="submit" className="bg-supabase-green text-black px-4 py-2 rounded text-sm font-medium flex items-center gap-2">
-                                        <Save size={16} /> {editingSessionId ? 'Update' : 'Save'}
+                                    <button type="submit" disabled={isSaving} className="bg-supabase-green text-black px-4 py-2 rounded text-sm font-medium flex items-center gap-2 disabled:opacity-50 transition-all hover:bg-supabase-greenHover">
+                                        {isSaving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />} 
+                                        {editingSessionId ? 'Update' : 'Save'}
                                     </button>
                                 </div>
                             </div>
