@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Plus, Clock, MapPin, User, X, Edit2, Trash2, Calendar, Loader2, Cloud, Save, AlertCircle, ChevronDown, Check, AlertTriangle } from 'lucide-react';
+import { Plus, Clock, MapPin, User, X, Edit2, Trash2, Calendar, Loader2, Cloud, Save, AlertCircle, ChevronDown, Check, AlertTriangle, UserCircle } from 'lucide-react';
 import { ClassSession, Teacher } from '../types';
 import { scheduleService } from '../services/scheduleService';
 import { useClass } from '../context/ClassContext';
@@ -16,46 +16,44 @@ const COLORS = [
 
 const DRAFT_PREFIX = 'supabase-schedule-draft-';
 
+interface ExtendedClassSession extends ClassSession {
+    show_profiles?: boolean;
+}
+
 const ClassSchedule: React.FC = () => {
   const { selectedClassId, setSelectedClassId, availableClasses, addClass } = useClass();
-  const [schedule, setSchedule] = useState<ClassSession[]>([]);
+  const [schedule, setSchedule] = useState<ExtendedClassSession[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
-  // Lists State (Fetched from DB)
   const [availableSubjects, setAvailableSubjects] = useState<{id: string, name: string}[]>([]);
   const [availableTeachers, setAvailableTeachers] = useState<Teacher[]>([]);
 
-  // Dropdown State
   const [isClassMenuOpen, setIsClassMenuOpen] = useState(false);
   const classDropdownRef = useRef<HTMLDivElement>(null);
 
-  // Modal States
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   
-  // Delete Modal State
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
   const [deletePasscode, setDeletePasscode] = useState('');
   
-  // Toast
   const { showToast } = useToast();
 
-  // Form State
-  const [formData, setFormData] = useState<Partial<ClassSession>>({
+  const [formData, setFormData] = useState<Partial<ExtendedClassSession>>({
     title: '',
     instructor: '',
     day: 'Monday',
     startTime: '09:00',
     endTime: '10:00',
     room: '',
-    color: COLORS[0]
+    color: COLORS[0],
+    show_profiles: true
   });
 
-  // Handle click outside for dropdown
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
         if (classDropdownRef.current && !classDropdownRef.current.contains(event.target as Node)) {
@@ -68,17 +66,12 @@ const ClassSchedule: React.FC = () => {
     };
   }, []);
 
-  // Fetch initial data whenever selectedClassId changes
   useEffect(() => {
     if (selectedClassId) {
-      // Clear state immediately to avoid cross-project contamination before loading
-      setHasUnsavedChanges(false);
-      setSchedule([]); 
       loadData();
     }
   }, [selectedClassId]);
 
-  // Save draft to localStorage whenever schedule changes and is marked unsaved
   useEffect(() => {
     if (selectedClassId && hasUnsavedChanges && !isLoading) {
         const draftKey = DRAFT_PREFIX + selectedClassId;
@@ -86,12 +79,10 @@ const ClassSchedule: React.FC = () => {
     }
   }, [schedule, hasUnsavedChanges, selectedClassId, isLoading]);
 
-  // Fetch subjects and teachers on mount
   useEffect(() => {
     const fetchDropdownData = async () => {
         const subs = await scheduleService.getSubjects();
         setAvailableSubjects(subs);
-        
         const teachers = await scheduleService.getTeachers();
         setAvailableTeachers(teachers);
     };
@@ -100,37 +91,15 @@ const ClassSchedule: React.FC = () => {
 
   const loadData = async () => {
     if (!selectedClassId) return;
-    
     setIsLoading(true);
+    setHasUnsavedChanges(false);
     try {
-      // 1. Check for unsaved draft first
-      const draftKey = DRAFT_PREFIX + selectedClassId;
-      const savedDraft = localStorage.getItem(draftKey);
-
-      if (savedDraft) {
-        try {
-           const parsedDraft = JSON.parse(savedDraft);
-           if (Array.isArray(parsedDraft)) {
-               setSchedule(parsedDraft);
-               setHasUnsavedChanges(true); // Mark as unsaved because it's from a draft
-               setLastSaved(null);
-               showToast("Restored unsaved draft", "info");
-               setIsLoading(false);
-               return; // Skip DB fetch if draft exists
-           }
-        } catch (e) {
-           console.error("Failed to parse draft", e);
-           localStorage.removeItem(draftKey); // Clean up corrupt draft
-        }
-      }
-
-      // 2. Fetch from DB if no draft
-      const data = await scheduleService.getAll(selectedClassId);
-      setSchedule(data);
+      const remoteData = await scheduleService.getAll(selectedClassId);
+      const initialSchedule = Array.isArray(remoteData) ? remoteData : [];
+      setSchedule(initialSchedule);
       setLastSaved(new Date());
       setHasUnsavedChanges(false);
     } catch (error) {
-      console.error("Failed to load schedule", error);
       showToast("Failed to load schedule data", "error");
     } finally {
       setIsLoading(false);
@@ -139,29 +108,27 @@ const ClassSchedule: React.FC = () => {
 
   const handleManualSave = async () => {
     if (!selectedClassId) return;
-
     setIsSaving(true);
     try {
-      await scheduleService.save(selectedClassId, schedule);
-      
-      // Clear draft on successful save
+      await scheduleService.save(selectedClassId, schedule as ClassSession[]);
       localStorage.removeItem(DRAFT_PREFIX + selectedClassId);
-      
       setLastSaved(new Date());
       setHasUnsavedChanges(false);
       showToast("Schedule saved successfully", "success");
     } catch (error) {
-      console.error("Failed to save schedule", error);
-      showToast("Failed to save to database. Check connection.", "error");
+      showToast("Failed to save to database", "error");
     } finally {
       setIsSaving(false);
     }
   };
 
-  const handleOpenModal = (session?: ClassSession) => {
+  const handleOpenModal = (session?: ExtendedClassSession) => {
     if (session) {
       setEditingId(session.id);
-      setFormData(session);
+      setFormData({
+          ...session,
+          show_profiles: session.show_profiles === true
+      });
     } else {
       setEditingId(null);
       setFormData({
@@ -171,7 +138,8 @@ const ClassSchedule: React.FC = () => {
         startTime: '09:00',
         endTime: '10:00',
         room: '',
-        color: COLORS[Math.floor(Math.random() * COLORS.length)]
+        color: COLORS[Math.floor(Math.random() * COLORS.length)],
+        show_profiles: true
       });
     }
     setIsModalOpen(true);
@@ -179,23 +147,22 @@ const ClassSchedule: React.FC = () => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
-    let newSchedule: ClassSession[];
-    
-    if (editingId) {
-      newSchedule = schedule.map(item => 
-        item.id === editingId ? { ...formData, id: editingId } as ClassSession : item
-      );
-    } else {
-      const newSession = {
-        ...formData as ClassSession,
-        id: Date.now().toString()
-      };
-      newSchedule = [...schedule, newSession];
-    }
-
-    // Update local state only
-    setSchedule(newSchedule);
+    setSchedule(prevSchedule => {
+      let updated;
+      if (editingId) {
+        updated = prevSchedule.map(item => 
+          item.id === editingId ? { ...item, ...formData } as ExtendedClassSession : item
+        );
+      } else {
+        const newSession = {
+          ...formData as ExtendedClassSession,
+          id: Date.now().toString()
+        };
+        // Explicitly append to prevSchedule
+        updated = [...prevSchedule, newSession];
+      }
+      return updated;
+    });
     setHasUnsavedChanges(true);
     setIsModalOpen(false);
   };
@@ -208,17 +175,13 @@ const ClassSchedule: React.FC = () => {
 
   const confirmDelete = () => {
     if (!deleteTargetId) return;
-
     if (deletePasscode !== '1234') {
         showToast("Incorrect passcode", 'error');
         return;
     }
-
-    const newSchedule = schedule.filter(item => item.id !== deleteTargetId);
-    // Update local state only
-    setSchedule(newSchedule);
+    setSchedule(prev => prev.filter(item => item.id !== deleteTargetId));
     setHasUnsavedChanges(true);
-    showToast("Class removed locally. Don't forget to save.", "info");
+    showToast("Class removed locally", "info");
     setIsDeleteModalOpen(false);
   };
 
@@ -232,12 +195,12 @@ const ClassSchedule: React.FC = () => {
   };
 
   const getClassesForDay = (day: string) => {
+    if (!Array.isArray(schedule)) return [];
     return schedule
-      .filter(s => s.day === day)
-      .sort((a, b) => a.startTime.localeCompare(b.startTime));
+      .filter(s => s && s.day === day)
+      .sort((a, b) => (a.startTime || '').localeCompare(b.startTime || ''));
   };
 
-  // Filter teachers based on the selected subject in formData
   const filteredTeachers = availableTeachers.filter(teacher => 
     formData.title && teacher.subjects && teacher.subjects.includes(formData.title)
   );
@@ -261,7 +224,6 @@ const ClassSchedule: React.FC = () => {
 
   return (
     <div className="h-full flex flex-col bg-supabase-bg text-supabase-text relative">
-      {/* Header */}
       <div className="h-14 border-b border-supabase-border bg-supabase-panel flex items-center justify-between px-6 sticky top-0 z-10 shrink-0">
         <div className="flex items-center gap-4">
             <div className="flex items-center gap-3">
@@ -272,7 +234,6 @@ const ClassSchedule: React.FC = () => {
                 </span>
             </div>
             
-            {/* Sync Status Indicator */}
             <div className="flex items-center gap-2 text-xs text-supabase-muted border-l border-supabase-border pl-4">
                 {isSaving ? (
                      <div className="flex items-center gap-1.5 text-supabase-green">
@@ -293,7 +254,6 @@ const ClassSchedule: React.FC = () => {
                 )}
             </div>
 
-            {/* Class Dropdown */}
             <div className="relative border-l border-supabase-border pl-4" ref={classDropdownRef}>
                 <button 
                     onClick={() => setIsClassMenuOpen(!isClassMenuOpen)}
@@ -356,7 +316,6 @@ const ClassSchedule: React.FC = () => {
         </div>
       </div>
 
-      {/* Grid View */}
       <div className="flex-1 overflow-auto p-4 sm:p-6">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 sm:gap-6 pb-6">
           {DAYS.map(day => (
@@ -395,8 +354,12 @@ const ClassSchedule: React.FC = () => {
                     </div>
 
                     <div className="flex flex-col gap-1">
-                        <div className="font-medium text-sm leading-tight pr-6">{session.title}</div>
-                        {/* Teacher Position */}
+                        <div className="flex items-center justify-between gap-2">
+                             <div className="font-medium text-sm leading-tight truncate pr-6">{session.title}</div>
+                             {session.show_profiles === true && (
+                                 <UserCircle size={14} className="text-emerald-400 shrink-0" />
+                             )}
+                        </div>
                         <div className="flex items-center gap-1.5 text-xs opacity-80 mt-1">
                             <User size={12} />
                             <span>{session.instructor}</span>
@@ -405,7 +368,6 @@ const ClassSchedule: React.FC = () => {
                             <MapPin size={12} />
                             <span>{session.room}</span>
                         </div>
-                        {/* Time Position */}
                          <div className="flex items-center gap-1.5 text-xs opacity-80">
                             <Clock size={12} />
                             <span>{session.startTime} - {session.endTime}</span>
@@ -419,7 +381,6 @@ const ClassSchedule: React.FC = () => {
         </div>
       </div>
 
-      {/* Edit Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
           <div className="bg-supabase-panel border border-supabase-border rounded-lg shadow-2xl w-full max-w-md overflow-hidden">
@@ -433,7 +394,6 @@ const ClassSchedule: React.FC = () => {
             </div>
             
             <form onSubmit={handleSubmit} className="p-6 space-y-4">
-              {/* 1. Day Selection */}
               <div className="space-y-1.5">
                 <label className="text-xs font-medium text-supabase-muted">Day of Week</label>
                 <select 
@@ -445,71 +405,40 @@ const ClassSchedule: React.FC = () => {
                 </select>
               </div>
 
-              {/* 2. Subject Selection */}
               <div className="space-y-1.5">
                 <label className="text-xs font-medium text-supabase-muted">Subject</label>
-                {availableSubjects.length > 0 ? (
-                    <select 
-                      required
-                      value={formData.title}
-                      onChange={e => setFormData({...formData, title: e.target.value, instructor: ''})}
-                      className="w-full bg-supabase-bg border border-supabase-border rounded px-3 py-2 text-sm text-supabase-text focus:outline-none focus:border-supabase-green"
-                    >
-                        <option value="" disabled>Select a subject</option>
-                        {availableSubjects.map(sub => (
-                            <option key={sub.id} value={sub.name}>{sub.name}</option>
-                        ))}
-                    </select>
-                ) : (
-                    <input 
-                      type="text" 
-                      required
-                      value={formData.title}
-                      onChange={e => setFormData({...formData, title: e.target.value})}
-                      className="w-full bg-supabase-bg border border-supabase-border rounded px-3 py-2 text-sm text-supabase-text focus:outline-none focus:border-supabase-green focus:ring-1 focus:ring-supabase-green"
-                      placeholder="e.g. Introduction to Computer Science"
-                    />
-                )}
-                {availableSubjects.length === 0 && (
-                     <div className="text-[10px] text-supabase-muted">Tip: Create 'subjects' table to enable dropdown.</div>
-                )}
+                <select 
+                    required
+                    value={formData.title}
+                    onChange={e => setFormData({...formData, title: e.target.value, instructor: ''})}
+                    className="w-full bg-supabase-bg border border-supabase-border rounded px-3 py-2 text-sm text-supabase-text focus:outline-none focus:border-supabase-green"
+                >
+                    <option value="" disabled>Select a subject</option>
+                    {availableSubjects.map(sub => (
+                        <option key={sub.id} value={sub.name}>{sub.name}</option>
+                    ))}
+                </select>
               </div>
 
-              {/* 3. Teacher Selection (Filtered) */}
                <div className="space-y-1.5">
                     <label className="text-xs font-medium text-supabase-muted">Teacher</label>
-                    {availableTeachers.length > 0 ? (
-                        <select 
+                    <select 
                         required
                         value={formData.instructor}
                         onChange={e => setFormData({...formData, instructor: e.target.value})}
                         disabled={!formData.title}
                         className={`w-full bg-supabase-bg border border-supabase-border rounded px-3 py-2 text-sm text-supabase-text focus:outline-none focus:border-supabase-green 
                             ${!formData.title ? 'opacity-50 cursor-not-allowed' : ''}`}
-                        >
-                            <option value="" disabled>
-                                {!formData.title ? 'Select a subject first' : 'Select a teacher'}
-                            </option>
-                            {filteredTeachers.map(t => (
-                                <option key={t.id} value={t.name}>{t.name}</option>
-                            ))}
-                        </select>
-                    ) : (
-                        <input 
-                        type="text" 
-                        required
-                        value={formData.instructor}
-                        onChange={e => setFormData({...formData, instructor: e.target.value})}
-                        className="w-full bg-supabase-bg border border-supabase-border rounded px-3 py-2 text-sm text-supabase-text focus:outline-none focus:border-supabase-green"
-                        placeholder="e.g. Prof. X"
-                        />
-                    )}
-                     {availableTeachers.length > 0 && formData.title && filteredTeachers.length === 0 && (
-                         <div className="text-[10px] text-yellow-500">No teachers found for {formData.title}. Assign in Teachers tab.</div>
-                     )}
+                    >
+                        <option value="" disabled>
+                            {!formData.title ? 'Select a subject first' : 'Select a teacher'}
+                        </option>
+                        {filteredTeachers.map(t => (
+                            <option key={t.id} value={t.name}>{t.name}</option>
+                        ))}
+                    </select>
                 </div>
 
-              {/* 4. Room */}
               <div className="space-y-1.5">
                     <label className="text-xs font-medium text-supabase-muted">Room</label>
                     <input 
@@ -545,6 +474,26 @@ const ClassSchedule: React.FC = () => {
                 </div>
               </div>
 
+              <div className="pt-2">
+                   <button 
+                    type="button"
+                    onClick={() => setFormData(prev => ({...prev, show_profiles: !prev.show_profiles}))}
+                    className={`w-full flex items-center justify-between p-3 rounded-lg border transition-all ${
+                        formData.show_profiles 
+                            ? 'bg-supabase-green/5 border-supabase-green/30 text-supabase-green' 
+                            : 'bg-supabase-sidebar border-supabase-border text-supabase-muted'
+                    }`}
+                   >
+                       <div className="flex items-center gap-3">
+                           <UserCircle size={18} />
+                           <span className="text-xs font-medium">Show Profile Picture</span>
+                       </div>
+                       <div className={`w-8 h-4 rounded-full relative transition-colors ${formData.show_profiles ? 'bg-supabase-green' : 'bg-supabase-muted'}`}>
+                           <div className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all ${formData.show_profiles ? 'left-4.5' : 'left-0.5'}`} style={{ left: formData.show_profiles ? '1.125rem' : '0.125rem' }}></div>
+                       </div>
+                   </button>
+              </div>
+
               <div className="pt-2 flex justify-end gap-3">
                 <button 
                   type="button"
@@ -565,10 +514,9 @@ const ClassSchedule: React.FC = () => {
         </div>
       )}
 
-      {/* Delete Confirmation Modal */}
       {isDeleteModalOpen && (
            <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-               <div className="bg-supabase-panel border border-supabase-border rounded-lg shadow-2xl w-full max-w-sm overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+               <div className="bg-supabase-panel border border-supabase-border rounded-lg shadow-2xl w-full max-sm overflow-hidden animate-in fade-in zoom-in-95 duration-200">
                    <div className="px-6 py-4 border-b border-supabase-border flex justify-between items-center bg-supabase-sidebar">
                        <div className="flex items-center gap-2 text-red-500">
                            <AlertTriangle size={18} />

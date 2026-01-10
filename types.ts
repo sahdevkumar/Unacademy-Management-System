@@ -40,6 +40,8 @@ export interface ClassSession {
   id: string;
   title: string;
   instructor: string;
+  instructorPhotoUrl?: string;
+  instructorStatus?: 'active' | 'inactive';
   day: string;
   startTime: string;
   endTime: string;
@@ -51,8 +53,9 @@ export interface Teacher {
   id: string;
   name: string;
   email: string;
-  subjects: string[]; // Changed from department: string to support multiple
+  subjects: string[];
   phone?: string;
   profile_photo_url?: string;
+  status?: 'active' | 'inactive';
   created_at?: string;
 }
