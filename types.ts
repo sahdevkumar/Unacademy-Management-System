@@ -6,9 +6,14 @@ export enum View {
   LIVE_SCHEDULE = 'LIVE_SCHEDULE',
   CLASS_SCHEDULE = 'CLASS_SCHEDULE',
   TEACHERS = 'TEACHERS',
+  TEACHER_TASKS = 'TEACHER_TASKS',
   AUTH = 'AUTH',
-  SETTINGS = 'SETTINGS'
+  SETTINGS = 'SETTINGS',
+  SQL_EDITOR = 'SQL_EDITOR',
+  ACCESS_CONTROL = 'ACCESS_CONTROL'
 }
+
+export type EducationLevel = 'junior' | 'senior' | 'all';
 
 export interface NavItem {
   id: View;
@@ -54,6 +59,7 @@ export interface ClassInfo {
   name: string;
   section: string;
   room_no: string;
+  level?: 'junior' | 'senior'; // junior (6-10), senior (11-13)
 }
 
 export interface Teacher {

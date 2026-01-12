@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Plus, Clock, User, X, Edit2, Trash2, Calendar, Loader2, Cloud, Save, AlertCircle, ChevronDown, Check, AlertTriangle, UserCircle, MapPin } from 'lucide-react';
+import { Plus, Clock, User, X, Edit2, Trash2, Calendar, Loader2, Cloud, Save, AlertCircle, ChevronDown, Check, AlertTriangle, UserCircle, MapPin, School } from 'lucide-react';
 import { ClassSession, Teacher } from '../types';
 import { scheduleService } from '../services/scheduleService';
 import { useClass } from '../context/ClassContext';
@@ -21,7 +21,7 @@ interface ExtendedClassSession extends ClassSession {
 }
 
 const ClassSchedule: React.FC = () => {
-  const { selectedClassId, setSelectedClassId, availableClasses, addClass, selectedClass } = useClass();
+  const { selectedClassId, setSelectedClassId, availableClasses, addClass, selectedClass, currentLevelFilter, setLevelFilter } = useClass();
   const [schedule, setSchedule] = useState<ExtendedClassSession[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -189,10 +189,13 @@ const ClassSchedule: React.FC = () => {
     const name = prompt("Enter new class name:");
     const section = prompt("Enter section (e.g., A, B):") || 'A';
     const room = prompt("Enter room number:") || '0';
+    const levelInput = prompt("Enter level (junior or senior):")?.toLowerCase();
+    const level = (levelInput === 'senior') ? 'senior' : 'junior';
+
     if (name) {
-      addClass(name, section, room);
+      addClass(name, section, room, level);
       setIsClassMenuOpen(false);
-      showToast(`Class '${name}' created`, "success");
+      showToast(`Class '${name}' (${level}) created`, "success");
     }
   };
 
@@ -207,23 +210,6 @@ const ClassSchedule: React.FC = () => {
     formData.title && teacher.subjects && teacher.subjects.includes(formData.title)
   );
 
-  if (!selectedClassId) {
-    return (
-        <div className="h-full flex flex-col items-center justify-center text-supabase-muted gap-3">
-             <p className="text-sm">Please select a class to view schedule.</p>
-        </div>
-    )
-  }
-
-  if (isLoading) {
-    return (
-      <div className="h-full flex flex-col items-center justify-center text-supabase-muted gap-3">
-        <Loader2 className="animate-spin text-supabase-green" size={32} />
-        <p className="text-sm">Loading schedule for {selectedClassId}...</p>
-      </div>
-    );
-  }
-
   return (
     <div className="h-full flex flex-col bg-supabase-bg text-supabase-text relative">
       <div className="h-14 border-b border-supabase-border bg-supabase-panel flex items-center justify-between px-6 sticky top-0 z-10 shrink-0">
@@ -231,9 +217,23 @@ const ClassSchedule: React.FC = () => {
             <div className="flex items-center gap-3">
                 <Calendar className="text-supabase-green" size={20} />
                 <h1 className="text-base font-medium hidden lg:block">Class Schedule</h1>
-                <span className="text-xs text-supabase-muted bg-supabase-sidebar px-2 py-0.5 rounded border border-supabase-border">
-                    {schedule.length} Sessions
-                </span>
+                <div className="flex items-center gap-1">
+                    <button 
+                      onClick={() => setLevelFilter('junior')}
+                      className={`px-2 py-0.5 rounded-l border border-supabase-border text-[10px] font-bold transition-all ${currentLevelFilter === 'junior' ? 'bg-blue-500/20 text-blue-400 border-blue-500/50' : 'bg-supabase-sidebar text-supabase-muted opacity-50'}`}
+                    >
+                        JUNIOR (6-10)
+                    </button>
+                    <button 
+                      onClick={() => setLevelFilter('senior')}
+                      className={`px-2 py-0.5 rounded-r border border-l-0 border-supabase-border text-[10px] font-bold transition-all ${currentLevelFilter === 'senior' ? 'bg-purple-500/20 text-purple-400 border-purple-500/50' : 'bg-supabase-sidebar text-supabase-muted opacity-50'}`}
+                    >
+                        SENIOR (11-13)
+                    </button>
+                    {currentLevelFilter !== 'all' && (
+                        <button onClick={() => setLevelFilter('all')} className="p-1 text-supabase-muted hover:text-supabase-text"><X size={10} /></button>
+                    )}
+                </div>
             </div>
             
             <div className="flex items-center gap-2 text-xs text-supabase-muted border-l border-supabase-border pl-4">
@@ -251,7 +251,7 @@ const ClassSchedule: React.FC = () => {
                 ) : (
                     <div className="flex items-center gap-1.5" title={lastSaved ? `Last synced: ${lastSaved.toLocaleTimeString()}` : ''}>
                         <Cloud size={12} />
-                        <span className="hidden sm:inline">{lastSaved ? 'All changes saved' : 'Synced'}</span>
+                        <span className="hidden sm:inline">{lastSaved ? 'All saved' : 'Synced'}</span>
                     </div>
                 )}
             </div>
@@ -262,22 +262,27 @@ const ClassSchedule: React.FC = () => {
                     className="flex flex-col items-start hover:bg-supabase-hover px-2 py-1 rounded transition-colors text-supabase-text group"
                 >
                     <div className="flex items-center gap-2">
-                        <span className="font-bold text-sm max-w-[120px] sm:max-w-[200px] truncate">{selectedClassId}</span>
+                        <span className="font-bold text-sm max-w-[120px] sm:max-w-[200px] truncate">{selectedClassId || 'Select Class'}</span>
                         <ChevronDown size={14} className="text-supabase-muted group-hover:text-supabase-text" />
                     </div>
                     {selectedClass && (
                         <div className="flex items-center gap-2 text-[10px] text-supabase-muted -mt-0.5">
-                            <span className="bg-supabase-green/10 text-supabase-green px-1 rounded">Sec: {selectedClass.section}</span>
-                            <span className="flex items-center gap-0.5"><MapPin size={10} /> Room: {selectedClass.room_no}</span>
+                            <span className={`px-1 rounded ${selectedClass.level === 'senior' ? 'bg-purple-500/10 text-purple-400' : 'bg-blue-500/10 text-blue-400'}`}>
+                                {selectedClass.level?.toUpperCase()}
+                            </span>
+                            <span className="flex items-center gap-0.5"><MapPin size={10} /> {selectedClass.room_no}</span>
                         </div>
                     )}
                 </button>
                 
                 {isClassMenuOpen && (
                     <div className="absolute top-full left-4 mt-1 w-64 bg-supabase-panel border border-supabase-border rounded-lg shadow-xl py-1 z-50 animate-in fade-in zoom-in-95 duration-100">
-                        <div className="px-3 py-2 text-xs font-semibold text-supabase-muted border-b border-supabase-border mb-1 uppercase tracking-wider">
-                            Switch Class
+                        <div className="px-3 py-2 text-xs font-semibold text-supabase-muted border-b border-supabase-border mb-1 uppercase tracking-wider flex justify-between">
+                            Switch Class ({currentLevelFilter})
                         </div>
+                        {availableClasses.length === 0 && (
+                            <div className="px-3 py-4 text-xs text-supabase-muted italic">No classes in this level</div>
+                        )}
                         {availableClasses.map(cls => (
                             <button 
                                 key={cls.id}
@@ -288,7 +293,10 @@ const ClassSchedule: React.FC = () => {
                                     <span className="font-medium">{cls.name}</span>
                                     <span className="text-[10px] opacity-70">Sec: {cls.section} • Room: {cls.room_no}</span>
                                 </div>
-                                {selectedClassId === cls.name && <Check size={14} className="text-supabase-green" />}
+                                <div className="flex items-center gap-2">
+                                    <span className={`text-[8px] font-bold px-1 rounded ${cls.level === 'senior' ? 'bg-purple-500/10 text-purple-400' : 'bg-blue-500/10 text-blue-400'}`}>{cls.level?.toUpperCase()}</span>
+                                    {selectedClassId === cls.name && <Check size={14} className="text-supabase-green" />}
+                                </div>
                             </button>
                         ))}
                         <div className="border-t border-supabase-border mt-1 pt-1">
@@ -316,7 +324,7 @@ const ClassSchedule: React.FC = () => {
                 }`}
             >
             <Save size={16} />
-            <span className="hidden sm:inline">Save Changes</span>
+            <span className="hidden sm:inline">Save</span>
             </button>
             
             <button 
@@ -330,70 +338,77 @@ const ClassSchedule: React.FC = () => {
       </div>
 
       <div className="flex-1 overflow-auto p-4 sm:p-6">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 sm:gap-6 pb-6">
-          {DAYS.map(day => (
-            <div key={day} className="flex flex-col gap-4 min-w-0">
-              <div className="sticky top-0 z-0 pb-2 bg-supabase-bg border-b-2 border-supabase-border">
-                <h3 className="font-medium text-supabase-text uppercase tracking-wider text-xs flex justify-between items-center">
-                    {day}
-                    <span className="text-[10px] text-supabase-muted bg-supabase-panel px-1.5 py-0.5 rounded border border-supabase-border">{getClassesForDay(day).length}</span>
-                </h3>
-              </div>
-              
-              <div className="flex flex-col gap-3">
-                {getClassesForDay(day).length === 0 && (
-                    <div className="h-24 rounded-lg border border-dashed border-supabase-border flex items-center justify-center text-xs text-supabase-muted bg-supabase-panel/30">
-                        No classes
-                    </div>
-                )}
-                {getClassesForDay(day).map(session => (
-                  <div 
-                    key={session.id} 
-                    className={`group relative p-4 rounded-lg border transition-all hover:shadow-lg ${session.color} border-opacity-50 hover:bg-opacity-80`}
-                  >
-                    <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 flex gap-1 transition-opacity">
-                      <button 
-                        onClick={(e) => { e.stopPropagation(); handleOpenModal(session); }}
-                        className="p-1 hover:bg-black/20 rounded"
-                      >
-                        <Edit2 size={12} />
-                      </button>
-                      <button 
-                        onClick={(e) => { e.stopPropagation(); initiateDelete(session.id); }}
-                        className="p-1 hover:bg-red-500/20 text-red-400 rounded"
-                      >
-                        <Trash2 size={12} />
-                      </button>
-                    </div>
-
-                    <div className="flex flex-col gap-1">
-                        <div className="flex items-center justify-between gap-2">
-                             <div className="font-medium text-sm leading-tight truncate pr-6">{session.title}</div>
-                             {session.show_profiles === true && (
-                                 <UserCircle size={14} className="text-emerald-400 shrink-0" />
-                             )}
-                        </div>
-                        <div className="flex items-center gap-1.5 text-xs opacity-80 mt-1">
-                            <User size={12} />
-                            <span>{session.instructor}</span>
-                        </div>
-                         <div className="flex items-center gap-1.5 text-xs opacity-80">
-                            <Clock size={12} />
-                            <span>{session.startTime} - {session.endTime}</span>
-                        </div>
-                        {(session.room || selectedClass?.room_no) && (
-                             <div className="flex items-center gap-1.5 text-[10px] opacity-70 mt-1 italic">
-                                <MapPin size={10} />
-                                <span>Room {session.room || selectedClass?.room_no}</span>
-                            </div>
-                        )}
-                    </div>
-                  </div>
-                ))}
-              </div>
+        {!selectedClassId ? (
+            <div className="h-full flex flex-col items-center justify-center opacity-40">
+                <School size={64} strokeWidth={1} className="mb-4" />
+                <p className="text-sm font-medium">Select a class from the level-filtered list to start editing.</p>
             </div>
-          ))}
-        </div>
+        ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 sm:gap-6 pb-6">
+            {DAYS.map(day => (
+                <div key={day} className="flex flex-col gap-4 min-w-0">
+                <div className="sticky top-0 z-0 pb-2 bg-supabase-bg border-b-2 border-supabase-border">
+                    <h3 className="font-medium text-supabase-text uppercase tracking-wider text-xs flex justify-between items-center">
+                        {day}
+                        <span className="text-[10px] text-supabase-muted bg-supabase-panel px-1.5 py-0.5 rounded border border-supabase-border">{getClassesForDay(day).length}</span>
+                    </h3>
+                </div>
+                
+                <div className="flex flex-col gap-3">
+                    {getClassesForDay(day).length === 0 && (
+                        <div className="h-24 rounded-lg border border-dashed border-supabase-border flex items-center justify-center text-xs text-supabase-muted bg-supabase-panel/30">
+                            No sessions
+                        </div>
+                    )}
+                    {getClassesForDay(day).map(session => (
+                    <div 
+                        key={session.id} 
+                        className={`group relative p-4 rounded-lg border transition-all hover:shadow-lg ${session.color} border-opacity-50 hover:bg-opacity-80`}
+                    >
+                        <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 flex gap-1 transition-opacity">
+                        <button 
+                            onClick={(e) => { e.stopPropagation(); handleOpenModal(session); }}
+                            className="p-1 hover:bg-black/20 rounded"
+                        >
+                            <Edit2 size={12} />
+                        </button>
+                        <button 
+                            onClick={(e) => { e.stopPropagation(); initiateDelete(session.id); }}
+                            className="p-1 hover:bg-red-500/20 text-red-400 rounded"
+                        >
+                            <Trash2 size={12} />
+                        </button>
+                        </div>
+
+                        <div className="flex flex-col gap-1">
+                            <div className="flex items-center justify-between gap-2">
+                                <div className="font-medium text-sm leading-tight truncate pr-6">{session.title}</div>
+                                {session.show_profiles === true && (
+                                    <UserCircle size={14} className="text-emerald-400 shrink-0" />
+                                )}
+                            </div>
+                            <div className="flex items-center gap-1.5 text-xs opacity-80 mt-1">
+                                <User size={12} />
+                                <span>{session.instructor}</span>
+                            </div>
+                            <div className="flex items-center gap-1.5 text-xs opacity-80">
+                                <Clock size={12} />
+                                <span>{session.startTime} - {session.endTime}</span>
+                            </div>
+                            {(session.room || selectedClass?.room_no) && (
+                                <div className="flex items-center gap-1.5 text-[10px] opacity-70 mt-1 italic">
+                                    <MapPin size={10} />
+                                    <span>Room {session.room || selectedClass?.room_no}</span>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                    ))}
+                </div>
+                </div>
+            ))}
+            </div>
+        )}
       </div>
 
       {isModalOpen && (
@@ -531,7 +546,7 @@ const ClassSchedule: React.FC = () => {
                    </div>
                    <div className="p-6">
                        <p className="text-sm text-supabase-muted mb-4">
-                           Enter the admin passcode to remove this class from the schedule.
+                           Enter the admin passcode to remove this session.
                        </p>
                        <div className="space-y-1.5">
                            <label className="text-xs font-medium text-supabase-muted">Admin Passcode</label>
@@ -541,7 +556,7 @@ const ClassSchedule: React.FC = () => {
                                value={deletePasscode}
                                onChange={(e) => setDeletePasscode(e.target.value)}
                                className="w-full bg-supabase-bg border border-supabase-border rounded px-3 py-2 text-sm text-supabase-text focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500"
-                               placeholder="Enter code..."
+                               placeholder="1234"
                                onKeyDown={(e) => e.key === 'Enter' && confirmDelete()}
                            />
                        </div>

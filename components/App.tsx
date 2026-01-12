@@ -5,6 +5,7 @@ import DashboardView from './components/DashboardView';
 import TableEditor from './components/TableEditor';
 import ClassSchedule from './components/ClassSchedule';
 import TeachersView from './components/TeachersView';
+import TeacherTaskView from './components/TeacherTaskView';
 import LiveScheduleView from './components/LiveScheduleView';
 import SqlEditor from './components/SqlEditor';
 import AccessControlView from './components/AccessControlView';
@@ -14,7 +15,7 @@ import { View } from './types';
 import { ThemeProvider } from './context/ThemeContext';
 import { ClassProvider } from './context/ClassContext';
 import { ToastProvider } from './context/ToastContext';
-import { AuthProvider, useAuth } from './context/AuthContext';
+import { AuthProvider, useAuth, PermissionKey } from './context/AuthContext';
 
 const AppContent: React.FC = () => {
   const { isLoading: authLoading, hasPermission, isAuthenticated } = useAuth();
@@ -55,17 +56,22 @@ const AppContent: React.FC = () => {
   }
 
   const renderContent = () => {
-    // Permission guards
-    if (currentView === View.TEACHERS && !hasPermission('MANAGE_TEACHERS')) {
-        return <PermissionDenied onBack={() => setCurrentView(View.DASHBOARD)} />;
-    }
-    
-    if (currentView === View.SQL_EDITOR && !hasPermission('ACCESS_SQL_EDITOR')) {
-        return <PermissionDenied onBack={() => setCurrentView(View.DASHBOARD)} />;
-    }
+    // Mapping every View to its required PermissionKey
+    const guards: Partial<Record<View, PermissionKey>> = {
+      [View.DASHBOARD]: 'VIEW_DASHBOARD',
+      [View.TABLE_EDITOR]: 'VIEW_SCHEDULE_LIST',
+      [View.LIVE_SCHEDULE]: 'VIEW_LIVE_SCHEDULE',
+      [View.CLASS_SCHEDULE]: 'VIEW_CLASS_SCHEDULE',
+      [View.TEACHER_TASKS]: 'VIEW_TEACHER_TASKS',
+      [View.TEACHERS]: 'MANAGE_TEACHERS',
+      [View.SETTINGS]: 'VIEW_SETTINGS',
+      [View.SQL_EDITOR]: 'ACCESS_SQL_EDITOR',
+      [View.ACCESS_CONTROL]: 'MANAGE_ROLES',
+    };
 
-    if (currentView === View.ACCESS_CONTROL && !hasPermission('MANAGE_ROLES')) {
-        return <PermissionDenied onBack={() => setCurrentView(View.DASHBOARD)} />;
+    const requiredPermission = guards[currentView];
+    if (requiredPermission && !hasPermission(requiredPermission)) {
+      return <PermissionDenied onBack={() => setCurrentView(View.DASHBOARD)} />;
     }
 
     switch (currentView) {
@@ -79,10 +85,14 @@ const AppContent: React.FC = () => {
         return <TableEditor />;
       case View.LIVE_SCHEDULE:
         return <LiveScheduleView />;
+      case View.TEACHER_TASKS:
+        return <TeacherTaskView />;
       case View.SQL_EDITOR:
         return <SqlEditor />;
       case View.ACCESS_CONTROL:
         return <AccessControlView />;
+      case View.SETTINGS:
+        return <div className="p-8 text-supabase-muted">Settings Module - Coming Soon</div>;
       default:
         return (
           <div className="flex items-center justify-center h-full text-supabase-muted p-8">

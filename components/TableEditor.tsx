@@ -4,6 +4,7 @@ import { Plus, Filter, ArrowUpDown, MoreHorizontal, Lock, RefreshCw, Eye, StopCi
 import { supabase } from '../services/supabaseClient';
 import { useClass } from '../context/ClassContext';
 import { useToast } from '../context/ToastContext';
+import { useAuth } from '../context/AuthContext';
 
 interface TableRowWithContent extends TableRow {
     content?: any[];
@@ -18,6 +19,7 @@ const TableEditor: React.FC<TableEditorProps> = ({ onlyLive = false }) => {
   const [isLoading, setIsLoading] = useState(true);
   const { setSelectedClassId } = useClass();
   const { showToast } = useToast();
+  const { hasPermission } = useAuth();
 
   // Delete Modal State
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
@@ -114,6 +116,10 @@ const TableEditor: React.FC<TableEditorProps> = ({ onlyLive = false }) => {
 
   const handleToggleGlobalProfiles = async (id: string) => {
     if (!supabase) return;
+    if (!hasPermission('EDIT_SCHEDULE')) {
+        showToast("Access Denied: Required Editor permissions", "error");
+        return;
+    }
     
     // 1. Fetch current content
     const { data: current, error: fetchErr } = await supabase
@@ -128,17 +134,10 @@ const TableEditor: React.FC<TableEditorProps> = ({ onlyLive = false }) => {
     }
 
     const sessions = current.content as (ClassSession & { show_profiles?: boolean })[];
-    
-    // 2. Determine target state (if any is true, set all to false, otherwise set all to true)
     const anyShowing = sessions.some(s => s.show_profiles !== false);
     const targetState = !anyShowing;
+    const updatedContent = sessions.map(s => ({ ...s, show_profiles: targetState }));
 
-    const updatedContent = sessions.map(s => ({
-        ...s,
-        show_profiles: targetState
-    }));
-
-    // 3. Save back
     const { error: updateErr } = await supabase
         .from('weekly_schedules')
         .update({ content: updatedContent })
@@ -153,10 +152,12 @@ const TableEditor: React.FC<TableEditorProps> = ({ onlyLive = false }) => {
   };
 
   const handleToggleStatus = async (id: string, currentStatus: string) => {
-    if (!supabase) {
-        showToast("Database connection not available", 'error');
+    if (!supabase) return;
+    if (!hasPermission('PUBLISH_SCHEDULE')) {
+        showToast("Access Denied: Required Publisher permissions", "error");
         return;
     }
+
     if (currentStatus === 'true') {
         setStopTargetId(id);
         setStopModalOpen(true);
@@ -196,6 +197,10 @@ const TableEditor: React.FC<TableEditorProps> = ({ onlyLive = false }) => {
 
   const initiateDelete = (id: string) => {
       if (!supabase) return;
+      if (!hasPermission('DELETE_SCHEDULE')) {
+          showToast("Access Denied: Admin only", "error");
+          return;
+      }
       setDeleteTargetId(id);
       setPasscode('');
       setDeleteModalOpen(true);
@@ -229,10 +234,8 @@ const TableEditor: React.FC<TableEditorProps> = ({ onlyLive = false }) => {
       }
   };
 
-  // Helper to check if profiles are globally enabled for a row
   const areProfilesEnabled = (content: any[] | undefined) => {
     if (!content || !Array.isArray(content)) return false;
-    // If at least one session has profiles enabled, consider it "on" for the icon color
     return content.some((s: any) => s.show_profiles !== false);
   };
 
@@ -252,9 +255,11 @@ const TableEditor: React.FC<TableEditorProps> = ({ onlyLive = false }) => {
             <button onClick={() => fetchData(false)} className="flex items-center gap-1 text-xs text-supabase-muted hover:text-supabase-text px-2 py-1 rounded hover:bg-supabase-hover transition-colors">
                 <RefreshCw size={14} className={isLoading ? "animate-spin" : ""} />
             </button>
-            <button className="flex items-center gap-1 text-xs bg-supabase-green/10 text-supabase-green border border-supabase-green/20 px-3 py-1.5 rounded hover:bg-supabase-green/20 transition-colors">
-                <Plus size={14} /> Insert Row
-            </button>
+            {hasPermission('EDIT_SCHEDULE') && (
+                <button className="flex items-center gap-1 text-xs bg-supabase-green/10 text-supabase-green border border-supabase-green/20 px-3 py-1.5 rounded hover:bg-supabase-green/20 transition-colors">
+                    <Plus size={14} /> Insert Row
+                </button>
+            )}
          </div>
       </div>
 
@@ -323,25 +328,31 @@ const TableEditor: React.FC<TableEditorProps> = ({ onlyLive = false }) => {
                                 <div className="flex items-center gap-2">
                                     <button onClick={() => handleView(row.class)} className="p-1.5 hover:bg-supabase-hover rounded text-supabase-muted hover:text-supabase-text transition-colors" title="View Schedule"><Eye size={16} /></button>
                                     
-                                    <button 
-                                        onClick={() => handleToggleGlobalProfiles(row.id)} 
-                                        className={`p-1.5 hover:bg-supabase-hover rounded transition-colors ${
-                                            profilesActive ? 'text-emerald-400 hover:text-emerald-300' : 'text-rose-400 hover:text-rose-300'
-                                        }`} 
-                                        title={profilesActive ? 'Profiles Visible (Click to Hide All)' : 'Profiles Hidden (Click to Show All)'}
-                                    >
-                                        <UserCircle size={16} />
-                                    </button>
+                                    {hasPermission('EDIT_SCHEDULE') && (
+                                        <button 
+                                            onClick={() => handleToggleGlobalProfiles(row.id)} 
+                                            className={`p-1.5 hover:bg-supabase-hover rounded transition-colors ${
+                                                profilesActive ? 'text-emerald-400 hover:text-emerald-300' : 'text-rose-400 hover:text-rose-300'
+                                            }`} 
+                                            title={profilesActive ? 'Profiles Visible (Click to Hide All)' : 'Profiles Hidden (Click to Show All)'}
+                                        >
+                                            <UserCircle size={16} />
+                                        </button>
+                                    )}
 
-                                    <button 
-                                        onClick={(e) => { e.stopPropagation(); handleToggleStatus(row.id, row.status); }} 
-                                        className={`p-1.5 rounded transition-colors ${row.status === 'true' ? 'text-red-400 hover:bg-red-500/10' : 'text-green-400 hover:bg-green-500/10'}`} 
-                                        title={row.status === 'true' ? 'Stop/Pause' : 'Publish'}
-                                    >
-                                        {row.status === 'true' ? <PauseCircle size={16} /> : <Upload size={16} />}
-                                    </button>
+                                    {hasPermission('PUBLISH_SCHEDULE') && (
+                                        <button 
+                                            onClick={(e) => { e.stopPropagation(); handleToggleStatus(row.id, row.status); }} 
+                                            className={`p-1.5 rounded transition-colors ${row.status === 'true' ? 'text-red-400 hover:bg-red-500/10' : 'text-green-400 hover:bg-green-500/10'}`} 
+                                            title={row.status === 'true' ? 'Stop/Pause' : 'Publish'}
+                                        >
+                                            {row.status === 'true' ? <PauseCircle size={16} /> : <Upload size={16} />}
+                                        </button>
+                                    )}
                                     
-                                    <button onClick={(e) => { e.stopPropagation(); initiateDelete(row.id); }} className="p-1.5 hover:bg-red-500/10 rounded text-supabase-muted hover:text-red-400 transition-colors" title="Delete"><Trash2 size={16} /></button>
+                                    {hasPermission('DELETE_SCHEDULE') && (
+                                        <button onClick={(e) => { e.stopPropagation(); initiateDelete(row.id); }} className="p-1.5 hover:bg-red-500/10 rounded text-supabase-muted hover:text-red-400 transition-colors" title="Delete"><Trash2 size={16} /></button>
+                                    )}
                                 </div>
                             </td>
                             <td className="border-b border-supabase-border bg-supabase-bg group-hover:bg-supabase-hover/40"></td>
@@ -351,52 +362,6 @@ const TableEditor: React.FC<TableEditorProps> = ({ onlyLive = false }) => {
             </tbody>
         </table>
       </div>
-       <div className="h-8 border-t border-supabase-border bg-supabase-panel flex items-center px-4 justify-between text-xs text-supabase-muted">
-            <div>{data.length} records</div>
-            <div>Page 1 of 1</div>
-       </div>
-
-       {deleteModalOpen && (
-           <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-               <div className="bg-supabase-panel border border-supabase-border rounded-lg shadow-2xl w-full max-w-sm overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-                   <div className="px-6 py-4 border-b border-supabase-border flex justify-between items-center bg-supabase-sidebar">
-                       <div className="flex items-center gap-2 text-red-500"><AlertTriangle size={18} /><h3 className="text-sm font-semibold text-supabase-text">Security Check</h3></div>
-                       <button onClick={() => setDeleteModalOpen(false)} className="text-supabase-muted hover:text-supabase-text"><X size={18} /></button>
-                   </div>
-                   <div className="p-6">
-                       <p className="text-sm text-supabase-muted mb-4">Enter admin passcode 1234 to confirm deletion.</p>
-                       <input type="password" autoFocus value={passcode} onChange={(e) => setPasscode(e.target.value)} className="w-full bg-supabase-bg border border-supabase-border rounded px-3 py-2 text-sm text-supabase-text focus:outline-none focus:border-red-500" placeholder="Enter code..." />
-                       <div className="mt-6 flex justify-end gap-3">
-                           <button onClick={() => setDeleteModalOpen(false)} className="px-4 py-2 text-sm text-supabase-muted">Cancel</button>
-                           <button onClick={confirmDelete} className="bg-red-500/10 text-red-500 border border-red-500/50 px-4 py-2 rounded text-sm font-medium hover:bg-red-500/20">Delete Schedule</button>
-                       </div>
-                   </div>
-               </div>
-           </div>
-       )}
-
-       {stopModalOpen && (
-           <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-               <div className="bg-supabase-panel border border-supabase-border rounded-lg shadow-2xl w-full max-w-sm overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-                   <div className="px-6 py-4 border-b border-supabase-border flex justify-between items-center bg-supabase-sidebar">
-                       <div className="flex items-center gap-2"><StopCircle size={18} className="text-red-400" /><h3 className="text-sm font-semibold">Stop Schedule</h3></div>
-                       <button onClick={() => setStopModalOpen(false)} className="text-supabase-muted hover:text-supabase-text"><X size={18} /></button>
-                   </div>
-                   <div className="p-6">
-                       <div className="grid grid-cols-2 gap-4">
-                           <button onClick={() => confirmStopAction('pause')} className="flex flex-col items-center gap-3 p-4 rounded-lg border border-supabase-border bg-supabase-bg hover:bg-supabase-hover group">
-                               <div className="p-3 rounded-full bg-amber-500/10 text-amber-500 group-hover:bg-amber-500/20"><PauseCircle size={24} /></div>
-                               <div className="text-center"><div className="text-sm font-medium text-supabase-text">Pause</div><div className="text-[10px] text-supabase-muted">Set to Draft</div></div>
-                           </button>
-                           <button onClick={() => confirmStopAction('stop')} className="flex flex-col items-center gap-3 p-4 rounded-lg border border-supabase-border bg-supabase-bg hover:bg-supabase-hover group">
-                               <div className="p-3 rounded-full bg-red-500/10 text-red-500 group-hover:bg-red-500/20"><StopCircle size={24} /></div>
-                               <div className="text-center"><div className="text-sm font-medium text-supabase-text">Stop</div><div className="text-[10px] text-supabase-muted">Set to Recent</div></div>
-                           </button>
-                       </div>
-                   </div>
-               </div>
-           </div>
-       )}
     </div>
   );
 };

@@ -74,15 +74,53 @@ export const scheduleService = {
   async getClasses(): Promise<ClassInfo[]> {
     if (!supabase) return [];
     try {
-        const { data, error } = await supabase.from('classes').select('id, name, section, room_no').order('name', { ascending: true });
-        if (error) return [];
-        return (data || []) as ClassInfo[];
-    } catch { return []; }
+        // Fetch specific columns including the integer level column
+        const { data, error } = await supabase
+          .from('classes')
+          .select('id, name, section, room_no, level')
+          .order('name', { ascending: true });
+        
+        if (error) {
+          console.error("Supabase Error fetching classes:", error.message);
+          return [];
+        }
+        
+        return (data || []).map(item => {
+          // Map database integer levels: 0 -> junior, 1 -> senior
+          let mappedLevel: 'junior' | 'senior' | undefined = undefined;
+          const rawLevel = (item as any).level;
+          
+          if (rawLevel === 0 || rawLevel === '0') mappedLevel = 'junior';
+          else if (rawLevel === 1 || rawLevel === '1') mappedLevel = 'senior';
+          
+          return {
+            id: item.id,
+            name: item.name,
+            section: item.section,
+            room_no: item.room_no,
+            level: mappedLevel
+          };
+        }) as ClassInfo[];
+    } catch (err) { 
+        console.error("Critical Exception fetching classes:", err);
+        return []; 
+    }
   },
 
-  async createClass(className: string, section: string = 'A', roomNo: string = '0'): Promise<void> {
+  async createClass(className: string, section: string = 'A', roomNo: string = '0', level: 'junior' | 'senior' = 'junior'): Promise<void> {
      if (supabase) {
-        try { await supabase.from('classes').insert([{ name: className, section, room_no: roomNo }]); } catch {}
+        try { 
+          // Map string level back to integer for database storage: junior -> 0, senior -> 1
+          const dbLevel = level === 'senior' ? 1 : 0;
+          await supabase.from('classes').insert([{ 
+            name: className, 
+            section, 
+            room_no: roomNo,
+            level: dbLevel 
+          }]); 
+        } catch (e) {
+          console.error("Failed to create class:", e);
+        }
      }
   },
 

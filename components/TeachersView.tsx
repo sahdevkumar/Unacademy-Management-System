@@ -3,6 +3,7 @@ import { Plus, Search, Trash2, Mail, Phone, Briefcase, User, GraduationCap, X, L
 import { Teacher } from '../types';
 import { scheduleService } from '../services/scheduleService';
 import { useToast } from '../context/ToastContext';
+import { useAuth } from '../context/AuthContext';
 
 const TeachersView: React.FC = () => {
   const [teachers, setTeachers] = useState<Teacher[]>([]);
@@ -16,7 +17,10 @@ const TeachersView: React.FC = () => {
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  
   const { showToast } = useToast();
+  const { hasPermission } = useAuth();
+  const canManage = hasPermission('MANAGE_TEACHERS');
 
   const [formData, setFormData] = useState<{
       name: string;
@@ -62,6 +66,7 @@ const TeachersView: React.FC = () => {
   const handleCloseModal = () => { setIsModalOpen(false); resetForm(); };
 
   const handleEdit = (teacher: Teacher) => {
+      if (!canManage) return;
       setFormData({
           name: teacher.name,
           email: teacher.email,
@@ -88,6 +93,7 @@ const TeachersView: React.FC = () => {
 
   const handleAddTeacher = async (e: React.FormEvent) => {
       e.preventDefault();
+      if (!canManage) return;
       setIsSubmitting(true);
       if (formData.subjects.length === 0) {
           showToast('Please select at least one subject', 'error');
@@ -118,7 +124,8 @@ const TeachersView: React.FC = () => {
   };
 
   const handleDelete = async (id: string, name: string) => {
-      if(confirm(`Are you sure?`)) {
+      if (!canManage) return;
+      if(confirm(`Are you sure you want to delete ${name}?`)) {
           const { success, error } = await scheduleService.deleteTeacher(id);
           if (success) { showToast('Teacher removed', 'success'); fetchTeachers(); }
           else { showToast(`Failed: ${error}`, 'error'); }
@@ -156,21 +163,31 @@ const TeachersView: React.FC = () => {
                 <Search size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-supabase-muted group-focus-within:text-supabase-text" />
                 <input type="text" placeholder="Search..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="bg-supabase-sidebar border border-supabase-border rounded-full py-1.5 pl-9 pr-4 text-sm text-supabase-text focus:outline-none focus:border-supabase-green w-64" />
             </div>
-            <button onClick={() => setIsModalOpen(true)} className="bg-supabase-green text-black px-4 py-2 rounded-md text-sm font-medium hover:bg-supabase-greenHover flex items-center gap-2"><Plus size={16} />Add Teacher</button>
+            {canManage && (
+              <button onClick={() => setIsModalOpen(true)} className="bg-supabase-green text-black px-4 py-2 rounded-md text-sm font-medium hover:bg-supabase-greenHover flex items-center gap-2">
+                <Plus size={16} />Add Teacher
+              </button>
+            )}
         </div>
       </div>
 
       <div className="flex-1 overflow-auto p-6">
-          {isLoading ? <Loader2 className="animate-spin text-supabase-green m-auto" size={32} /> : (
+          {isLoading ? (
+            <div className="h-full flex items-center justify-center">
+              <Loader2 className="animate-spin text-supabase-green" size={32} />
+            </div>
+          ) : (
             <>
                 {viewMode === 'grid' ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                         {filteredTeachers.map(teacher => (
                             <div key={teacher.id} className="bg-supabase-panel border border-supabase-border rounded-lg p-5 group relative">
-                                <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity flex gap-2 z-10">
-                                    <button onClick={() => handleEdit(teacher)} className="p-1.5 text-supabase-muted hover:text-supabase-text hover:bg-supabase-hover rounded"><Edit2 size={16} /></button>
-                                    <button onClick={() => handleDelete(teacher.id, teacher.name)} className="p-1.5 text-supabase-muted hover:text-red-400 hover:bg-red-500/10 rounded"><Trash2 size={16} /></button>
-                                </div>
+                                {canManage && (
+                                  <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity flex gap-2 z-10">
+                                      <button onClick={() => handleEdit(teacher)} className="p-1.5 text-supabase-muted hover:text-supabase-text hover:bg-supabase-hover rounded"><Edit2 size={16} /></button>
+                                      <button onClick={() => handleDelete(teacher.id, teacher.name)} className="p-1.5 text-supabase-muted hover:text-red-400 hover:bg-red-500/10 rounded"><Trash2 size={16} /></button>
+                                  </div>
+                                )}
                                 <div className="flex items-start gap-4 mb-4">
                                     <div className="relative shrink-0">
                                         <div className="w-12 h-12 rounded-full border border-white/10 shrink-0 overflow-hidden bg-supabase-sidebar">
@@ -200,7 +217,7 @@ const TeachersView: React.FC = () => {
                                     <th className="px-6 py-3 text-xs font-medium text-supabase-muted uppercase">Status</th>
                                     <th className="px-6 py-3 text-xs font-medium text-supabase-muted uppercase">Teacher</th>
                                     <th className="px-6 py-3 text-xs font-medium text-supabase-muted uppercase">Subjects</th>
-                                    <th className="px-6 py-3 text-xs font-medium text-supabase-muted uppercase text-right">Action</th>
+                                    {canManage && <th className="px-6 py-3 text-xs font-medium text-supabase-muted uppercase text-right">Action</th>}
                                 </tr>
                             </thead>
                             <tbody>
@@ -218,10 +235,12 @@ const TeachersView: React.FC = () => {
                                         <td className="px-6 py-4 border-b border-supabase-border">
                                             <div className="flex gap-1">{teacher.subjects?.map((s, i) => <span key={i} className="text-[10px] px-2 py-0.5 rounded-full bg-supabase-green/10 text-supabase-green border border-supabase-green/20">{s}</span>)}</div>
                                         </td>
-                                        <td className="px-6 py-4 border-b border-supabase-border text-right">
-                                             <button onClick={() => handleEdit(teacher)} className="p-1.5 text-supabase-muted hover:text-supabase-text"><Edit2 size={16} /></button>
-                                             <button onClick={() => handleDelete(teacher.id, teacher.name)} className="p-1.5 text-supabase-muted hover:text-red-400"><Trash2 size={16} /></button>
-                                        </td>
+                                        {canManage && (
+                                          <td className="px-6 py-4 border-b border-supabase-border text-right">
+                                               <button onClick={() => handleEdit(teacher)} className="p-1.5 text-supabase-muted hover:text-supabase-text"><Edit2 size={16} /></button>
+                                               <button onClick={() => handleDelete(teacher.id, teacher.name)} className="p-1.5 text-supabase-muted hover:text-red-400"><Trash2 size={16} /></button>
+                                          </td>
+                                        )}
                                     </tr>
                                 ))}
                             </tbody>
@@ -232,14 +251,14 @@ const TeachersView: React.FC = () => {
           )}
       </div>
 
-      {isModalOpen && (
+      {isModalOpen && canManage && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
               <div className="bg-supabase-panel border border-supabase-border rounded-lg shadow-2xl w-full max-w-md overflow-hidden flex flex-col max-h-[90vh]">
                   <div className="flex items-center justify-between px-6 py-4 border-b border-supabase-border bg-supabase-sidebar shrink-0">
                       <h2 className="text-sm font-semibold text-supabase-text">{editingId ? 'Edit Teacher' : 'Add Teacher'}</h2>
                       <button onClick={handleCloseModal} className="text-supabase-muted hover:text-supabase-text"><X size={18} /></button>
                   </div>
-                  <form onSubmit={handleAddTeacher} className="p-6 space-y-4 overflow-y-auto custom-scrollbar">
+                  <form onSubmit={handleAddTeacher} className="p-6 space-y-4 overflow-y-auto scrollbar-hide">
                       <div className="flex justify-center mb-2">
                           <div className="relative w-20 h-20 rounded-full border border-supabase-border bg-supabase-bg group cursor-pointer overflow-hidden flex items-center justify-center" onClick={triggerFileInput}>
                               {imagePreview ? <img src={imagePreview} className="w-full h-full object-cover" /> : <Camera size={24} className="text-supabase-muted" />}

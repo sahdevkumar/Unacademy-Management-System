@@ -1,8 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Search, Bell, HelpCircle, User, ChevronRight, Settings, FlaskConical, Menu } from 'lucide-react';
+import { Search, Bell, HelpCircle, User, ChevronRight, Settings, FlaskConical, Menu, LogOut } from 'lucide-react';
 import { View } from '../types';
 import { useTheme, Theme } from '../context/ThemeContext';
 import { useClass } from '../context/ClassContext';
+import { useAuth } from '../context/AuthContext';
 
 interface HeaderProps {
   currentView: View;
@@ -12,6 +13,7 @@ interface HeaderProps {
 const Header: React.FC<HeaderProps> = ({ currentView, onMenuToggle }) => {
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const { selectedClassId } = useClass();
+  const { user, logout } = useAuth();
   
   const dropdownRef = useRef<HTMLDivElement>(null);
   
@@ -37,6 +39,7 @@ const Header: React.FC<HeaderProps> = ({ currentView, onMenuToggle }) => {
       case View.LIVE_SCHEDULE: return 'Live Schedule';
       case View.AUTH: return 'Authentication';
       case View.CLASS_SCHEDULE: return 'Schedule';
+      case View.TEACHERS: return 'Teachers';
       case View.SETTINGS: return 'Settings';
       default: return 'Dashboard';
     }
@@ -83,7 +86,6 @@ const Header: React.FC<HeaderProps> = ({ currentView, onMenuToggle }) => {
             placeholder="Search..." 
             className="bg-supabase-sidebar border border-supabase-border rounded-full py-1.5 pl-9 pr-4 text-sm text-supabase-text focus:outline-none focus:border-supabase-green focus:ring-1 focus:ring-supabase-green w-64 transition-all"
           />
-          <span className="absolute right-3 top-1/2 transform -translate-y-1/2 text-xs text-supabase-muted border border-supabase-border rounded px-1.5 py-0.5">/</span>
         </div>
         
         <button className="text-supabase-green border border-supabase-green px-3 py-1.5 rounded text-xs font-medium hover:bg-supabase-green/10 transition-colors hidden sm:block">
@@ -111,7 +113,8 @@ const Header: React.FC<HeaderProps> = ({ currentView, onMenuToggle }) => {
             {isUserMenuOpen && (
                 <div className="absolute right-0 top-full mt-2 w-64 bg-supabase-panel border border-supabase-border rounded-lg shadow-2xl overflow-hidden z-50 animate-in fade-in zoom-in-95 duration-100 origin-top-right ring-1 ring-white/5">
                     <div className="px-4 py-3 border-b border-supabase-border">
-                        <div className="text-sm text-supabase-text font-medium truncate">akanksharoy505@gmail.com</div>
+                        <div className="text-sm text-supabase-text font-medium truncate">{user?.email || 'Guest User'}</div>
+                        <div className="text-[10px] text-supabase-muted uppercase tracking-widest mt-0.5">{user?.role || 'User'}</div>
                     </div>
                     
                     <div className="py-1 border-b border-supabase-border">
@@ -134,7 +137,11 @@ const Header: React.FC<HeaderProps> = ({ currentView, onMenuToggle }) => {
                     </div>
 
                     <div className="py-1">
-                        <button className="w-full text-left px-4 py-2 text-sm text-supabase-muted hover:bg-supabase-hover hover:text-supabase-text transition-colors">
+                        <button 
+                            onClick={logout}
+                            className="w-full text-left px-4 py-2 text-sm text-red-500 hover:bg-red-500/10 flex items-center gap-3 transition-colors"
+                        >
+                            <LogOut size={16} />
                             Log out
                         </button>
                     </div>
