@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { ShieldCheck, Users, Lock, Check, Search, RotateCcw, Layers, ChevronRight, User as UserIcon, CheckCircle2, Shield, MoreVertical } from 'lucide-react';
+import { ShieldCheck, Users, Lock, Check, Search, RotateCcw, Layers, ChevronRight, User as UserIcon, CheckCircle2, Shield, MoreVertical, Plus, X } from 'lucide-react';
 import { useAuth, PermissionKey, UserRole } from '../context/AuthContext';
 import { supabase } from '../services/supabaseClient';
 import { useToast } from '../context/ToastContext';
@@ -11,12 +11,12 @@ interface SystemUser {
   id: string;
   full_name: string;
   email: string;
-  role: string; // Dynamic string from DB
+  role: string;
   mobile: string | null;
 }
 
 const AccessControlView: React.FC = () => {
-  const { user: currentUser, permissions, updatePermission } = useAuth();
+  const { user: currentUser, permissions, availableRoles, updatePermission, addRole } = useAuth();
   const { refreshAssignments } = useClass();
   const { showToast } = useToast();
   const [activeTab, setActiveTab] = useState<'users' | 'class_control' | 'permissions'>('users');
@@ -24,11 +24,10 @@ const AccessControlView: React.FC = () => {
   const [dbClasses, setDbClasses] = useState<ClassInfo[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [isRoleModalOpen, setIsRoleModalOpen] = useState(false);
+  const [newRoleName, setNewRoleName] = useState('');
   
-  // Roles exactly as they appear in your screenshot for the dropdown
-  const databaseRoles = ['superadmin', 'Super Admin', 'Admin', 'editor', 'Teacher', 'viewer'];
   const permissionKeys = Object.keys(permissions) as PermissionKey[];
-
   const [selectedUserForClass, setSelectedUserForClass] = useState<string | null>(null);
   const [assignments, setAssignments] = useState<Record<string, string[]>>({});
 
@@ -69,7 +68,7 @@ const AccessControlView: React.FC = () => {
         if (supabase) {
           const { error } = await supabase
             .from('system_users')
-            .update({ role: newRole })
+            .update({ role: newRole.toLowerCase() })
             .eq('id', userId);
           
           if (error) throw error;
@@ -77,13 +76,30 @@ const AccessControlView: React.FC = () => {
         
         setSystemUsers(prev => prev.map(u => u.id === userId ? { ...u, role: newRole } : u));
         showToast(`Role updated to ${newRole}`, 'success');
-        
-        if (userId === currentUser?.id) {
-            showToast("Your session role updated. Refresh to apply changes.", "info");
-        }
     } catch (err: any) {
         showToast("Database update failed: " + err.message, "error");
     }
+  };
+
+  const handleCreateRole = async () => {
+    if (!newRoleName.trim()) return;
+    try {
+      await addRole(newRoleName);
+      showToast(`Role '${newRoleName}' created`, 'success');
+      setNewRoleName('');
+      setIsRoleModalOpen(false);
+    } catch (e: any) {
+      showToast(e.message, 'error');
+    }
+  };
+
+  const handleTogglePermission = async (key: PermissionKey, role: string) => {
+    const internalRole = role.toLowerCase();
+    if (internalRole === 'superadmin') return;
+    const currentRoles = permissions[key] || [];
+    const newRoles = currentRoles.includes(internalRole) ? currentRoles.filter(r => r !== internalRole) : [...currentRoles, internalRole];
+    await updatePermission(key, newRoles);
+    showToast(`Matrix updated`, 'success');
   };
 
   const toggleLevelAssignment = async (userId: string, level: 'junior' | 'senior') => {
@@ -114,16 +130,6 @@ const AccessControlView: React.FC = () => {
     } catch (e: any) {
       showToast("Failed to save: " + e.message, "error");
     }
-  };
-
-  const handleTogglePermission = async (key: PermissionKey, role: string) => {
-    // Permission map uses normalized internal keys
-    const internalRole = role.toLowerCase().replace(/\s+/g, '') as UserRole;
-    if (internalRole === 'superadmin') return;
-    const currentRoles = permissions[key] || [];
-    const newRoles = currentRoles.includes(internalRole) ? currentRoles.filter(r => r !== internalRole) : [...currentRoles, internalRole];
-    await updatePermission(key, newRoles);
-    showToast(`Matrix updated`, 'success');
   };
 
   const filteredUsers = systemUsers.filter(u => 
@@ -175,19 +181,23 @@ const AccessControlView: React.FC = () => {
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-supabase-muted group-focus-within:text-supabase-green transition-colors" size={16} />
                 <input type="text" placeholder="Search system_users..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full bg-supabase-panel border border-supabase-border rounded-lg pl-10 pr-4 py-2.5 text-sm text-supabase-text focus:outline-none focus:border-supabase-green transition-all placeholder-supabase-muted/50" />
             </div>
-            <button onClick={fetchData} className="p-2.5 text-supabase-muted hover:text-supabase-green bg-supabase-panel border border-supabase-border rounded-lg transition-all flex items-center gap-2 text-xs font-bold uppercase tracking-widest">
-              <RotateCcw size={16} className={isLoading ? 'animate-spin' : ''} />
-              Fetch Latest
-            </button>
+            <div className="flex gap-2">
+              <button onClick={() => setIsRoleModalOpen(true)} className="px-4 py-2 bg-supabase-green text-black rounded-lg text-xs font-bold uppercase tracking-widest flex items-center gap-2 hover:bg-supabase-greenHover transition-all">
+                <Plus size={16} /> New Role
+              </button>
+              <button onClick={fetchData} className="p-2.5 text-supabase-muted hover:text-supabase-green bg-supabase-panel border border-supabase-border rounded-lg transition-all">
+                <RotateCcw size={16} className={isLoading ? 'animate-spin' : ''} />
+              </button>
+            </div>
            </div>
            
            <div className="bg-supabase-panel border border-supabase-border rounded-xl overflow-hidden shadow-2xl">
              <table className="w-full text-left">
                <thead>
                  <tr className="bg-supabase-sidebar/80 text-[10px] uppercase font-bold text-supabase-muted tracking-[0.2em] border-b border-supabase-border">
-                   <th className="px-6 py-5">Employee (Supabase Record)</th>
+                   <th className="px-6 py-5">Employee</th>
                    <th className="px-6 py-5">Database Role</th>
-                   <th className="px-6 py-5 text-center">Verification</th>
+                   <th className="px-6 py-5 text-center">Status</th>
                    <th className="px-6 py-5 text-right">Actions</th>
                  </tr>
                </thead>
@@ -200,50 +210,39 @@ const AccessControlView: React.FC = () => {
                    <tr key={u.id} className="hover:bg-supabase-hover/20 transition-colors group">
                      <td className="px-6 py-4">
                         <div className="flex items-center gap-4">
-                            <div className="w-10 h-10 rounded-xl bg-supabase-sidebar border border-supabase-border flex items-center justify-center text-supabase-muted group-hover:text-supabase-green group-hover:border-supabase-green/30 transition-all font-bold text-lg shadow-sm">
+                            <div className="w-10 h-10 rounded-xl bg-supabase-sidebar border border-supabase-border flex items-center justify-center text-supabase-muted group-hover:text-supabase-green transition-all font-bold text-lg">
                                 {u.full_name?.charAt(0) || 'U'}
                             </div>
                             <div className="min-w-0">
                                 <div className="text-sm font-bold text-supabase-text truncate">{u.full_name}</div>
-                                <div className="text-[10px] font-mono text-supabase-muted truncate group-hover:text-supabase-muted/80 transition-colors">{u.email}</div>
-                                {u.mobile && <div className="text-[9px] text-supabase-green/60 font-mono">{u.mobile}</div>}
+                                <div className="text-[10px] font-mono text-supabase-muted truncate">{u.email}</div>
                             </div>
                         </div>
                      </td>
                      <td className="px-6 py-4">
                         <div className="relative inline-block w-48">
                             <select 
-                                value={u.role} 
+                                value={u.role.toLowerCase()} 
                                 onChange={(e) => handleRoleChange(u.id, e.target.value)}
-                                className={`w-full text-[11px] font-black uppercase py-2 px-3 pr-8 rounded-lg bg-supabase-sidebar border border-supabase-border outline-none focus:border-supabase-green transition-all appearance-none cursor-pointer tracking-widest ${
-                                    u.role?.toLowerCase().includes('admin') ? 'text-purple-400 border-purple-500/20' : 'text-supabase-green border-supabase-green/20'
-                                }`}
+                                className="w-full text-[11px] font-black uppercase py-2 px-3 pr-8 rounded-lg bg-supabase-sidebar border border-supabase-border outline-none focus:border-supabase-green text-supabase-green tracking-widest appearance-none cursor-pointer"
                             >
-                                {databaseRoles.map(r => <option key={r} value={r} className="bg-supabase-panel text-supabase-text">{r}</option>)}
+                                {availableRoles.map(r => <option key={r} value={r.toLowerCase()} className="bg-supabase-panel text-supabase-text">{r}</option>)}
                             </select>
                             <div className="absolute inset-y-0 right-0 flex items-center px-2 pointer-events-none text-supabase-muted">
-                                <svg className="w-4 h-4 fill-current" viewBox="0 0 20 20"><path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" fillRule="evenodd"></path></svg>
+                                <ChevronRight size={14} className="rotate-90" />
                             </div>
                         </div>
                      </td>
                      <td className="px-6 py-4 text-center">
-                        <div className="flex items-center justify-center gap-2.5">
-                             <div className={`w-2 h-2 rounded-full shadow-sm ${u.role?.toLowerCase() === 'viewer' ? 'bg-supabase-muted' : 'bg-supabase-green animate-pulse'}`} />
-                             <span className="text-[10px] font-bold text-supabase-muted tracking-wide uppercase">Verified Profile</span>
+                        <div className="flex items-center justify-center gap-2">
+                             <div className="w-2 h-2 rounded-full bg-supabase-green animate-pulse" />
+                             <span className="text-[10px] font-bold text-supabase-muted uppercase">Synced</span>
                         </div>
                      </td>
                      <td className="px-6 py-4 text-right">
-                        <div className="flex items-center justify-end gap-1">
-                            <button 
-                                onClick={() => { setSelectedUserForClass(u.id); setActiveTab('class_control'); }} 
-                                className="p-2.5 hover:bg-supabase-hover rounded-xl text-supabase-muted hover:text-supabase-green transition-all transform hover:scale-110" 
-                            >
-                                <Layers size={18} />
-                            </button>
-                            <button className="p-2.5 hover:bg-supabase-hover rounded-xl text-supabase-muted hover:text-supabase-text transition-all">
-                                <MoreVertical size={18} />
-                            </button>
-                        </div>
+                        <button onClick={() => { setSelectedUserForClass(u.id); setActiveTab('class_control'); }} className="p-2.5 hover:bg-supabase-hover rounded-xl text-supabase-muted hover:text-supabase-green transition-all">
+                            <Layers size={18} />
+                        </button>
                      </td>
                    </tr>
                  ))}
@@ -256,9 +255,9 @@ const AccessControlView: React.FC = () => {
       {activeTab === 'class_control' && (
         <div className="grid grid-cols-1 md:grid-cols-12 gap-6 animate-in fade-in slide-in-from-right-4 duration-300">
             <div className="md:col-span-4 bg-supabase-panel border border-supabase-border rounded-xl overflow-hidden flex flex-col h-[600px] shadow-lg">
-                <div className="p-5 border-b border-supabase-border bg-supabase-sidebar flex items-center justify-between">
+                <div className="p-5 border-b border-supabase-border bg-supabase-sidebar">
                   <h3 className="text-[10px] font-black uppercase text-supabase-muted tracking-[0.2em] flex items-center gap-2">
-                    <Users size={14} /> DB Records
+                    <Users size={14} /> Accounts
                   </h3>
                 </div>
                 <div className="flex-1 overflow-y-auto custom-scrollbar">
@@ -267,7 +266,6 @@ const AccessControlView: React.FC = () => {
                             <div className="min-w-0">
                                 <div className={`text-sm font-bold truncate ${selectedUserForClass === u.id ? 'text-supabase-green' : 'text-supabase-text'}`}>{u.full_name}</div>
                                 <div className="text-[10px] text-supabase-muted truncate font-mono mt-0.5">{u.email}</div>
-                                <div className={`text-[9px] font-black uppercase mt-1 tracking-widest ${u.role?.toLowerCase().includes('admin') ? 'text-purple-400' : 'text-supabase-green opacity-60'}`}>{u.role}</div>
                             </div>
                             {selectedUserForClass === u.id && <ChevronRight size={18} className="text-supabase-green" />}
                         </button>
@@ -275,74 +273,57 @@ const AccessControlView: React.FC = () => {
                 </div>
             </div>
 
-            <div className="md:col-span-8 bg-supabase-panel border border-supabase-border rounded-xl overflow-hidden flex flex-col h-[600px] shadow-2xl relative">
+            <div className="md:col-span-8 bg-supabase-panel border border-supabase-border rounded-xl overflow-hidden flex flex-col h-[600px] shadow-2xl">
                 {selectedUserObj ? (
                     <>
-                        <div className="px-8 py-6 border-b border-supabase-border bg-supabase-sidebar flex items-center justify-between">
-                            <div className="flex items-center gap-5">
-                                <div className="w-14 h-14 rounded-2xl bg-supabase-bg border border-supabase-border flex items-center justify-center text-supabase-green shadow-xl ring-1 ring-white/5">
-                                    <UserIcon size={28} />
-                                </div>
-                                <div>
-                                    <h3 className="text-lg font-black text-supabase-text uppercase tracking-wider">{selectedUserObj.full_name}</h3>
-                                    <div className="flex items-center gap-3">
-                                        <span className={`text-[10px] font-black uppercase tracking-widest ${selectedUserObj.role?.toLowerCase().includes('admin') ? 'text-purple-400' : 'text-supabase-green'}`}>{selectedUserObj.role}</span>
-                                        <div className="w-1 h-1 rounded-full bg-supabase-muted/50" />
-                                        <span className="text-[10px] text-supabase-muted font-mono">{selectedUserObj.id.slice(0, 12)}...</span>
-                                    </div>
+                        <div className="px-8 py-6 border-b border-supabase-border bg-supabase-sidebar flex items-center gap-5">
+                            <div className="w-14 h-14 rounded-2xl bg-supabase-bg border border-supabase-border flex items-center justify-center text-supabase-green shadow-xl">
+                                <UserIcon size={28} />
+                            </div>
+                            <div>
+                                <h3 className="text-lg font-black text-supabase-text uppercase tracking-wider">{selectedUserObj.full_name}</h3>
+                                <div className="flex items-center gap-3">
+                                    <span className="text-[10px] font-black uppercase tracking-widest text-supabase-green">{selectedUserObj.role}</span>
+                                    <span className="text-[10px] text-supabase-muted font-mono">{selectedUserObj.id.slice(0, 12)}...</span>
                                 </div>
                             </div>
                         </div>
                         
-                        <div className="flex-1 p-8 flex flex-col items-center justify-center gap-12 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-supabase-green/[0.03] via-transparent to-transparent">
+                        <div className="flex-1 p-8 flex flex-col items-center justify-center gap-12">
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-8 w-full max-w-2xl">
                                 <button 
                                     onClick={() => toggleLevelAssignment(selectedUserObj.id, 'junior')}
-                                    className={`relative p-10 rounded-[2rem] border-2 transition-all flex flex-col items-center gap-6 group shadow-lg ${
+                                    className={`p-10 rounded-[2rem] border-2 transition-all flex flex-col items-center gap-6 shadow-lg ${
                                         getLevelStatus(selectedUserObj.id, 'junior') === 'all' 
-                                        ? 'bg-blue-500/10 border-blue-500 text-blue-400 shadow-blue-500/10' 
-                                        : getLevelStatus(selectedUserObj.id, 'junior') === 'partial'
-                                        ? 'bg-blue-500/5 border-blue-500/30 text-blue-300'
-                                        : 'bg-supabase-sidebar border-supabase-border text-supabase-muted hover:border-blue-500/40 hover:text-blue-300'
+                                        ? 'bg-blue-500/10 border-blue-500 text-blue-400' 
+                                        : 'bg-supabase-sidebar border-supabase-border text-supabase-muted hover:border-blue-500/40'
                                     }`}
                                 >
-                                    <div className={`w-16 h-16 rounded-2xl flex items-center justify-center transition-all transform group-hover:scale-110 shadow-xl ${
-                                        getLevelStatus(selectedUserObj.id, 'junior') === 'all' ? 'bg-blue-500 text-black' : 'bg-supabase-bg border border-supabase-border'
-                                    }`}>
-                                        {getLevelStatus(selectedUserObj.id, 'junior') === 'all' ? <Check size={36} strokeWidth={4} /> : <Users size={32} />}
+                                    <div className={`w-16 h-16 rounded-2xl flex items-center justify-center ${getLevelStatus(selectedUserObj.id, 'junior') === 'all' ? 'bg-blue-500 text-black' : 'bg-supabase-bg border border-supabase-border'}`}>
+                                        <Users size={32} />
                                     </div>
-                                    <div className="text-center">
-                                        <div className="text-lg font-black uppercase tracking-[0.15em]">Junior Module</div>
-                                        <div className="text-[10px] opacity-60 mt-1.5 font-mono tracking-widest">CLASSES 6 - 10</div>
-                                    </div>
+                                    <div className="text-center font-black uppercase tracking-[0.15em]">Junior Module</div>
                                 </button>
 
                                 <button 
                                     onClick={() => toggleLevelAssignment(selectedUserObj.id, 'senior')}
-                                    className={`relative p-10 rounded-[2rem] border-2 transition-all flex flex-col items-center gap-6 group shadow-lg ${
+                                    className={`p-10 rounded-[2rem] border-2 transition-all flex flex-col items-center gap-6 shadow-lg ${
                                         getLevelStatus(selectedUserObj.id, 'senior') === 'all' 
-                                        ? 'bg-purple-500/10 border-purple-500 text-purple-400 shadow-purple-500/10' 
-                                        : getLevelStatus(selectedUserObj.id, 'senior') === 'partial'
-                                        ? 'bg-purple-500/5 border-purple-500/30 text-purple-300'
-                                        : 'bg-supabase-sidebar border-supabase-border text-supabase-muted hover:border-purple-500/40 hover:text-purple-300'
+                                        ? 'bg-purple-500/10 border-purple-500 text-purple-400' 
+                                        : 'bg-supabase-sidebar border-supabase-border text-supabase-muted hover:border-purple-500/40'
                                     }`}
                                 >
-                                    <div className={`w-16 h-16 rounded-2xl flex items-center justify-center transition-all transform group-hover:scale-110 shadow-xl ${
-                                        getLevelStatus(selectedUserObj.id, 'senior') === 'all' ? 'bg-purple-500 text-black' : 'bg-supabase-bg border border-supabase-border'
-                                    }`}>
-                                        {getLevelStatus(selectedUserObj.id, 'senior') === 'all' ? <Check size={36} strokeWidth={4} /> : <Users size={32} />}
+                                    <div className={`w-16 h-16 rounded-2xl flex items-center justify-center ${getLevelStatus(selectedUserObj.id, 'senior') === 'all' ? 'bg-purple-500 text-black' : 'bg-supabase-bg border border-supabase-border'}`}>
+                                        <Users size={32} />
                                     </div>
-                                    <div className="text-center">
-                                        <div className="text-lg font-black uppercase tracking-[0.15em]">Senior Module</div>
-                                        <div className="text-[10px] opacity-60 mt-1.5 font-mono tracking-widest">CLASSES 11 - 13</div>
-                                    </div>
+                                    <div className="text-center font-black uppercase tracking-[0.15em]">Senior Module</div>
                                 </button>
                             </div>
                         </div>
                     </>
                 ) : (
-                    <div className="h-full flex flex-col items-center justify-center text-supabase-muted space-y-6">
-                        <p className="text-sm font-black uppercase tracking-[0.2em] text-supabase-text">Select a Database Record</p>
+                    <div className="h-full flex flex-col items-center justify-center text-supabase-muted">
+                        <p className="text-sm font-black uppercase tracking-[0.2em]">Select an Account</p>
                     </div>
                 )}
             </div>
@@ -350,20 +331,17 @@ const AccessControlView: React.FC = () => {
       )}
 
       {activeTab === 'permissions' && (
-        <div className="bg-supabase-panel border border-supabase-border rounded-xl overflow-hidden animate-in fade-in slide-in-from-top-4 duration-300 shadow-2xl">
-             <div className="p-8 border-b border-supabase-border bg-supabase-sidebar flex items-center justify-between">
-                <div>
-                    <h3 className="text-sm font-black text-supabase-text uppercase tracking-widest">Capability Matrix Mapping</h3>
-                    <p className="text-[10px] text-supabase-muted mt-1 font-mono">Defining access for system_users roles</p>
-                </div>
+        <div className="bg-supabase-panel border border-supabase-border rounded-xl overflow-hidden shadow-2xl">
+             <div className="p-8 border-b border-supabase-border bg-supabase-sidebar">
+                <h3 className="text-sm font-black text-supabase-text uppercase tracking-widest">Capability Matrix</h3>
              </div>
              <div className="overflow-x-auto">
               <table className="w-full text-left">
                 <thead>
                   <tr className="bg-supabase-sidebar/50 text-[10px] font-black uppercase text-supabase-muted tracking-[0.25em]">
                     <th className="px-8 py-6 border-b border-supabase-border">Capability</th>
-                    {databaseRoles.map(role => (
-                        <th key={role} className="px-8 py-6 text-center border-b border-supabase-border min-w-[140px]">
+                    {availableRoles.map(role => (
+                        <th key={role} className="px-8 py-6 text-center border-b border-supabase-border min-w-[120px]">
                             {role}
                         </th>
                     ))}
@@ -375,8 +353,8 @@ const AccessControlView: React.FC = () => {
                       <td className="px-8 py-5">
                         <div className="text-[11px] font-black uppercase tracking-widest text-supabase-text">{permKey.replace(/_/g, ' ')}</div>
                       </td>
-                      {databaseRoles.map(role => {
-                        const internalRole = role.toLowerCase().replace(/\s+/g, '') as UserRole;
+                      {availableRoles.map(role => {
+                        const internalRole = role.toLowerCase();
                         const hasPerm = permissions[permKey]?.includes(internalRole);
                         const isSuper = internalRole === 'superadmin';
                         return (
@@ -384,13 +362,13 @@ const AccessControlView: React.FC = () => {
                             <button 
                                 onClick={() => handleTogglePermission(permKey, role)} 
                                 disabled={isSuper} 
-                                className={`group relative w-11 h-11 rounded-2xl flex items-center justify-center mx-auto transition-all shadow-sm ${
+                                className={`w-10 h-10 rounded-2xl flex items-center justify-center mx-auto transition-all ${
                                     hasPerm 
                                         ? (isSuper ? 'bg-purple-500/10 text-purple-400 border border-purple-500/20' : 'bg-supabase-green/10 text-supabase-green border border-supabase-green/20') 
-                                        : 'bg-supabase-sidebar text-supabase-muted/20 hover:text-supabase-muted/50 border border-supabase-border/50'
-                                } ${isSuper ? 'cursor-not-allowed' : 'cursor-pointer hover:scale-110 active:scale-95'}`}
+                                        : 'bg-supabase-sidebar text-supabase-muted/20 border border-supabase-border/50'
+                                } ${isSuper ? 'cursor-not-allowed' : 'cursor-pointer hover:scale-105'}`}
                             >
-                              {hasPerm ? <CheckCircle2 size={22} strokeWidth={2.5} /> : <Shield size={18} />}
+                              {hasPerm ? <CheckCircle2 size={20} /> : <Shield size={16} />}
                             </button>
                           </td>
                         );
@@ -400,6 +378,38 @@ const AccessControlView: React.FC = () => {
                 </tbody>
               </table>
             </div>
+        </div>
+      )}
+
+      {/* Role Creation Modal */}
+      {isRoleModalOpen && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="bg-supabase-panel border border-supabase-border rounded-xl shadow-2xl w-full max-w-sm overflow-hidden">
+            <div className="px-6 py-4 border-b border-supabase-border bg-supabase-sidebar flex justify-between items-center">
+              <h3 className="text-sm font-black uppercase tracking-widest text-supabase-text">Create Role</h3>
+              <button onClick={() => setIsRoleModalOpen(false)} className="text-supabase-muted hover:text-supabase-text"><X size={18} /></button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase text-supabase-muted tracking-widest">Role Name</label>
+                <input 
+                  type="text" 
+                  autoFocus
+                  placeholder="e.g. Coordinator" 
+                  value={newRoleName}
+                  onChange={(e) => setNewRoleName(e.target.value)}
+                  className="w-full bg-supabase-bg border border-supabase-border rounded-lg px-4 py-2.5 text-sm text-supabase-text focus:outline-none focus:border-supabase-green"
+                  onKeyDown={(e) => e.key === 'Enter' && handleCreateRole()}
+                />
+              </div>
+              <button 
+                onClick={handleCreateRole}
+                className="w-full bg-supabase-green text-black py-2.5 rounded-lg text-sm font-bold uppercase tracking-widest hover:bg-supabase-greenHover transition-all shadow-lg shadow-supabase-green/10"
+              >
+                Create Entry
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

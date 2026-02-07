@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { MetricData, ClassSession, ClassInfo } from '../types';
-import { Activity, Database, Server, CheckCircle2, Clock, MapPin, User, Calendar, Cloud, MonitorPlay } from 'lucide-react';
+import { Activity, Database, Server, CheckCircle2, Clock, MapPin, User, Calendar, Cloud, MonitorPlay, Wifi, WifiOff } from 'lucide-react';
 import { scheduleService } from '../services/scheduleService';
+import { McpService } from '../services/mcpService';
 import { supabase } from '../services/supabaseClient';
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -51,6 +52,7 @@ const DashboardView: React.FC = () => {
   const [selectedScheduleId, setSelectedScheduleId] = useState<string | null>(null);
   const [classesInfo, setClassesInfo] = useState<ClassInfo[]>([]);
   const [loading, setLoading] = useState(true);
+  const [mcpStatus, setMcpStatus] = useState<'connected' | 'disconnected' | 'loading'>('loading');
 
   const [stats, setStats] = useState({
       active: 0,
@@ -73,6 +75,9 @@ const DashboardView: React.FC = () => {
           
           const infos = await scheduleService.getClasses();
           setClassesInfo(infos);
+
+          const context = await McpService.getSystemContext();
+          setMcpStatus(context.status === 'connected' ? 'connected' : 'disconnected');
 
           if (supabase) {
               const { count: activeCount } = await supabase.from('weekly_schedules').select('*', { count: 'exact', head: true }).eq('status', 'true');
@@ -102,12 +107,16 @@ const DashboardView: React.FC = () => {
       <div className="flex items-center justify-between mb-2">
         <div>
           <h1 className="text-2xl font-semibold text-supabase-text">Dashboard</h1>
-          <p className="text-supabase-muted mt-1">System Overview & Active Schedules</p>
+          <p className="text-supabase-muted mt-1">Management Core & Backend Protocols</p>
         </div>
         <div className="flex gap-3">
-             <span className="flex items-center gap-2 text-xs px-3 py-1 rounded-full bg-green-900/30 text-green-400 border border-green-900">
-                <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></div>
-                Live System
+             <span className={`flex items-center gap-2 text-xs px-3 py-1 rounded-full border ${mcpStatus === 'connected' ? 'bg-green-900/30 text-green-400 border-green-900' : 'bg-red-900/30 text-red-400 border-red-900'}`}>
+                {mcpStatus === 'connected' ? <Wifi size={14} /> : <WifiOff size={14} />}
+                {mcpStatus === 'connected' ? 'MCP Protocol Active' : 'MCP Offline'}
+             </span>
+             <span className="flex items-center gap-2 text-xs px-3 py-1 rounded-full bg-blue-900/30 text-blue-400 border border-blue-900">
+                <div className="w-2 h-2 rounded-full bg-blue-400 animate-pulse"></div>
+                Supabase Realtime
              </span>
         </div>
       </div>
@@ -116,11 +125,11 @@ const DashboardView: React.FC = () => {
         <Card title="Active Schedules">
            <Stat label="Published & Live" value={stats.active.toString()} icon={<MonitorPlay size={20} />} sub="Visible to students" />
         </Card>
-        <Card title="Draft Workspaces">
-           <Stat label="In Progress" value={stats.drafts.toString()} icon={<Activity size={20} />} sub="Pending publication" />
+        <Card title="MCP Service Status">
+           <Stat label="Operational Integrity" value={mcpStatus === 'connected' ? "100%" : "0%"} icon={<Server size={20} />} sub={mcpStatus === 'connected' ? "Backend Sync: OK" : "Reconnecting..."} />
         </Card>
-        <Card title="Total Projects">
-           <Stat label="All Classes" value={stats.total.toString()} icon={<Database size={20} />} sub="Registered classes" />
+        <Card title="Total Classes">
+           <Stat label="Registered Units" value={stats.total.toString()} icon={<Database size={20} />} sub="Full Class Directory" />
         </Card>
       </div>
 
@@ -128,7 +137,7 @@ const DashboardView: React.FC = () => {
           <div className="px-6 py-4 border-b border-supabase-border flex flex-col sm:flex-row items-center justify-between bg-supabase-sidebar gap-4">
               <div className="flex items-center gap-2 self-start sm:self-auto">
                    <Calendar className="text-supabase-green" size={20} />
-                   <h2 className="text-sm font-semibold text-supabase-text uppercase tracking-wide">Live Schedule View</h2>
+                   <h2 className="text-sm font-semibold text-supabase-text uppercase tracking-wide">Live Schedule Explorer</h2>
               </div>
               <div className="flex flex-wrap gap-2 w-full sm:w-auto">
                   {publishedSchedules.length === 0 && !loading && <span className="text-xs text-supabase-muted italic">No active schedules found</span>}
@@ -148,13 +157,13 @@ const DashboardView: React.FC = () => {
               {loading ? (
                    <div className="h-full flex flex-col items-center justify-center text-supabase-muted gap-3">
                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-supabase-green"></div>
-                       <p className="text-sm">Loading live data...</p>
+                       <p className="text-sm font-mono tracking-widest">QUERYING MCP PROTOCOL...</p>
                    </div>
               ) : !currentSchedule ? (
                    <div className="h-full flex flex-col items-center justify-center text-supabase-muted gap-4 opacity-60">
                        <Cloud size={48} strokeWidth={1} />
                        <div className="text-center">
-                           <p className="text-lg font-medium text-supabase-text">No Published Schedules</p>
+                           <p className="text-lg font-medium text-supabase-text">No Published Signals</p>
                            <p className="text-sm mt-1">Publish a schedule from the Table Editor to see it here.</p>
                        </div>
                    </div>
@@ -175,11 +184,10 @@ const DashboardView: React.FC = () => {
                                     {classes.length === 0 && (
                                         <div className={`h-24 rounded-lg border border-dashed ${theme.wrapper} flex items-center justify-center group overflow-hidden relative`}>
                                             <div className={`absolute inset-0 ${theme.overlay} opacity-0 group-hover:opacity-100 transition-opacity`}></div>
-                                            <span className={`text-lg font-bold ${theme.text} tracking-wide select-none animate-pulse`}>Coming Soon..</span>
+                                            <span className={`text-lg font-bold ${theme.text} tracking-wide select-none animate-pulse`}>No Sessions</span>
                                         </div>
                                     )}
                                     {classes.map(session => {
-                                        // Fallback to class room_no if session.room is empty
                                         const displayRoom = session.room || currentClassMetadata?.room_no || 'N/A';
                                         return (
                                             <div key={session.id} className={`p-3 rounded-lg border ${session.color ? session.color.split(' ').filter(c => c.startsWith('border') || c.startsWith('bg-')).join(' ') : ''} border-opacity-40 bg-opacity-5 dark:bg-opacity-10 bg-supabase-panel hover:bg-opacity-10 transition-colors`}>
@@ -221,7 +229,7 @@ const DashboardView: React.FC = () => {
                           <div className="text-supabase-green font-medium">Section: {currentClassMetadata.section} • Room: {currentClassMetadata.room_no}</div>
                       )}
                   </div>
-                  <div>Last Updated: {new Date(currentSchedule.updated_at).toLocaleString()}</div>
+                  <div>Protocol Stamp: {new Date(currentSchedule.updated_at).toLocaleString()}</div>
               </div>
           )}
       </div>

@@ -39,8 +39,15 @@ const Header: React.FC<HeaderProps> = ({ currentView, onMenuToggle }) => {
       case View.LIVE_SCHEDULE: return 'Live Schedule';
       case View.AUTH: return 'Authentication';
       case View.CLASS_SCHEDULE: return 'Schedule';
-      case View.TEACHERS: return 'Teachers';
+      case View.TEACHERS: return 'Teachers List';
+      case View.TEACHER_TASKS: return 'Teacher';
       case View.SETTINGS: return 'Settings';
+      case View.SQL_EDITOR: return 'SQL Editor';
+      case View.MCP_CONSOLE: return 'MCP Interface';
+      case View.ACCESS_CONTROL: return 'Access Control';
+      case View.EMPLOYEES: return 'Employees';
+      case View.ABSENT_CALL: return 'Absent Call';
+      case View.STUDENT_ATTENDANCE: return 'Student Attendance';
       default: return 'Dashboard';
     }
   };

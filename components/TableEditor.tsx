@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import { TableRow, ClassSession } from '../types';
 import { Plus, Filter, ArrowUpDown, MoreHorizontal, Lock, RefreshCw, Eye, StopCircle, Upload, Trash2, X, AlertTriangle, PauseCircle, Radio, UserCircle, UserMinus } from 'lucide-react';
@@ -90,7 +91,8 @@ const TableEditor: React.FC<TableEditorProps> = ({ onlyLive = false }) => {
                  
                  if (onlyLive) updatedQuery = updatedQuery.eq('status', 'true');
 
-                 const { data: updatedResult } = updatedQuery;
+                 // Fixed property access error by awaiting the query result before destructuring
+                 const { data: updatedResult } = await updatedQuery;
                  if (updatedResult) currentData = updatedResult as TableRowWithContent[];
             }
             setData(currentData);

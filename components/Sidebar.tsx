@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { View, NavItem } from '../types';
 import { useAuth, PermissionKey } from '../context/AuthContext';
@@ -8,14 +9,35 @@ import {
   Settings, 
   Users, 
   Radio, 
-  ChevronDown,
-  ChevronRight,
-  Archive,
-  CalendarDays,
-  GraduationCap,
-  Terminal,
-  ShieldCheck,
-  CheckSquare
+  ChevronDown, 
+  ChevronRight, 
+  Archive, 
+  CalendarDays, 
+  GraduationCap, 
+  Terminal, 
+  ShieldCheck, 
+  CheckSquare, 
+  Clock, 
+  User, 
+  ListChecks,
+  Briefcase,
+  Cpu,
+  FileText,
+  CreditCard,
+  Book,
+  Activity,
+  Wallet,
+  Coins,
+  Percent,
+  Calculator,
+  Scale,
+  PhoneCall,
+  UserCheck,
+  ClipboardList,
+  BarChart3,
+  MessageSquarePlus,
+  History,
+  ListTodo
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -26,24 +48,26 @@ interface SidebarProps {
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, isOpen = false, onClose }) => {
-  const { hasPermission, user } = useAuth();
+  const { hasPermission, user, designations } = useAuth();
   const [isScheduleExpanded, setIsScheduleExpanded] = useState(true);
+  const [isTeacherExpanded, setIsTeacherExpanded] = useState(false);
+  const [isPayrollExpanded, setIsPayrollExpanded] = useState(false);
 
-  // Group schedule views
+  // Group views
   const scheduleViews = [View.CLASS_SCHEDULE, View.TABLE_EDITOR, View.LIVE_SCHEDULE];
+  const teacherViews = [View.TEACHER_TASKS, View.TODAY_TASK];
+  const payrollViews = [View.PAYROLL, View.PAYROLL_SETUP, View.PAYROLL_BASE_SALARY, View.PAYROLL_DEDUCTIONS];
   
-  // Auto-expand if current view is a schedule view
+  // Auto-expand if current view is in the group
   useEffect(() => {
-    if (scheduleViews.includes(currentView)) {
-      setIsScheduleExpanded(true);
-    }
+    if (scheduleViews.includes(currentView)) setIsScheduleExpanded(true);
+    if (teacherViews.includes(currentView)) setIsTeacherExpanded(true);
+    if (payrollViews.includes(currentView)) setIsPayrollExpanded(true);
   }, [currentView]);
 
-  const handleNavClick = (viewId: string) => {
-    if (Object.values(View).includes(viewId as any)) {
-      onChangeView(viewId as View);
-      if (onClose) onClose();
-    }
+  const handleNavClick = (viewId: View) => {
+    onChangeView(viewId);
+    if (onClose) onClose();
   };
 
   const renderNavItem = (id: View, label: string, icon: React.ReactNode, permission: PermissionKey, isSubItem = false) => {
@@ -68,11 +92,6 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, isOpen = f
       </button>
     );
   };
-
-  const canSeeAnySchedule = 
-    hasPermission('VIEW_CLASS_SCHEDULE') || 
-    hasPermission('VIEW_SCHEDULE_LIST') || 
-    hasPermission('VIEW_LIVE_SCHEDULE');
 
   return (
     <>
@@ -110,43 +129,120 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, isOpen = f
           </div>
           
           {renderNavItem(View.DASHBOARD, 'Dashboard', <LayoutDashboard size={18} />, 'VIEW_DASHBOARD')}
+          {renderNavItem(View.ENQUIRE_CALL, 'Enquire Call', <MessageSquarePlus size={18} />, 'VIEW_TEACHER_TASKS')}
+          {renderNavItem(View.STUDENT_ATTENDANCE, 'Student Attendance', <UserCheck size={18} />, 'VIEW_TEACHER_TASKS')}
+          {renderNavItem(View.ABSENT_CALL, 'Absent Call', <PhoneCall size={18} />, 'VIEW_TEACHER_TASKS')}
           
           {/* Grouped Schedule Menu */}
-          {canSeeAnySchedule && (
-            <div className="mb-1">
-              <button 
-                onClick={() => setIsScheduleExpanded(!isScheduleExpanded)}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-md transition-colors text-sm font-medium 
-                  ${scheduleViews.includes(currentView) ? 'text-supabase-text' : 'text-supabase-muted hover:text-supabase-text hover:bg-supabase-hover'}`}
-              >
-                <div className="flex items-center gap-3">
-                  <CalendarDays size={18} className={scheduleViews.includes(currentView) ? 'text-supabase-green' : ''} />
-                  <span>Schedule</span>
-                </div>
-                {isScheduleExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-              </button>
-              
-              {isScheduleExpanded && (
-                <div className="mt-1 space-y-0.5">
-                  {renderNavItem(View.CLASS_SCHEDULE, 'Class Schedule', null, 'VIEW_CLASS_SCHEDULE', true)}
-                  {renderNavItem(View.TABLE_EDITOR, 'Schedule List', null, 'VIEW_SCHEDULE_LIST', true)}
-                  {renderNavItem(View.LIVE_SCHEDULE, 'Live Schedule', null, 'VIEW_LIVE_SCHEDULE', true)}
-                </div>
-              )}
-            </div>
-          )}
+          <div className="mb-1">
+            <button 
+              onClick={() => setIsScheduleExpanded(!isScheduleExpanded)}
+              className={`w-full flex items-center justify-between px-3 py-2 rounded-md transition-colors text-sm font-medium 
+                ${scheduleViews.includes(currentView) ? 'text-supabase-text' : 'text-supabase-muted hover:text-supabase-text hover:bg-supabase-hover'}`}
+            >
+              <div className="flex items-center gap-3">
+                <CalendarDays size={18} className={scheduleViews.includes(currentView) ? 'text-supabase-green' : ''} />
+                <span>Schedule</span>
+              </div>
+              {isScheduleExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+            </button>
+            
+            {isScheduleExpanded && (
+              <div className="mt-1 space-y-0.5">
+                {renderNavItem(View.CLASS_SCHEDULE, 'Class Schedule', null, 'VIEW_CLASS_SCHEDULE', true)}
+                {renderNavItem(View.TABLE_EDITOR, 'Schedule List', null, 'VIEW_SCHEDULE_LIST', true)}
+                {renderNavItem(View.LIVE_SCHEDULE, 'Live Schedule', null, 'VIEW_LIVE_SCHEDULE', true)}
+              </div>
+            )}
+          </div>
 
-          {renderNavItem(View.TEACHER_TASKS, 'Teacher Task', <CheckSquare size={18} />, 'VIEW_TEACHER_TASKS')}
+          {/* Grouped Teacher Menu */}
+          <div className="mb-1">
+            <button 
+              onClick={() => setIsTeacherExpanded(!isTeacherExpanded)}
+              className={`w-full flex items-center justify-between px-3 py-2 rounded-md transition-colors text-sm font-medium 
+                ${teacherViews.includes(currentView) ? 'text-supabase-text' : 'text-supabase-muted hover:text-supabase-text hover:bg-supabase-hover'}`}
+            >
+              <div className="flex items-center gap-3">
+                <CheckSquare size={18} className={teacherViews.includes(currentView) ? 'text-supabase-green' : ''} />
+                <span>Teacher</span>
+              </div>
+              {isTeacherExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+            </button>
+            
+            {isTeacherExpanded && (
+              <div className="mt-1 space-y-0.5">
+                {renderNavItem(View.TEACHER_TASKS, 'Teacher Tasks', null, 'VIEW_TEACHER_TASKS', true)}
+                {renderNavItem(View.TODAY_TASK, 'Today Task', null, 'VIEW_TEACHER_TASKS', true)}
+              </div>
+            )}
+          </div>
           
+          <div className="mt-6 mb-2 text-xs font-semibold text-supabase-muted uppercase tracking-wider px-3 pb-2">
+            Operations
+          </div>
+          {renderNavItem(View.ATTENDANCE_DASHBOARD, 'Attendance Stats', <BarChart3 size={18} />, 'VIEW_REPORTS')}
+          {renderNavItem(View.ENQUIRE_CALL_LOG, 'Enquiry Call Log', <History size={18} />, 'VIEW_REPORTS')}
+          {renderNavItem(View.ABSENT_CALL_LOG, 'Absent Call Log', <ClipboardList size={18} />, 'VIEW_REPORTS')}
+          {renderNavItem(View.DOCUMENT, 'Documents', <FileText size={18} />, 'VIEW_REPORTS')}
+          {renderNavItem(View.BANKING, 'Banking', <CreditCard size={18} />, 'VIEW_REPORTS')}
+          {renderNavItem(View.LEDGER, 'Ledger', <Book size={18} />, 'VIEW_REPORTS')}
+          {renderNavItem(View.WORK_PROGRESS, 'Work Progress', <Activity size={18} />, 'VIEW_REPORTS')}
+
           <div className="mt-6 mb-2 text-xs font-semibold text-supabase-muted uppercase tracking-wider px-3 pb-2">
             Management
           </div>
           
-          {renderNavItem(View.TEACHERS, 'Teachers', <GraduationCap size={18} />, 'MANAGE_TEACHERS')}
+          {renderNavItem(View.TEACHERS, 'Teachers List', <GraduationCap size={18} />, 'MANAGE_TEACHERS')}
+          {renderNavItem(View.EMPLOYEES, 'Employees', <Briefcase size={18} />, 'MANAGE_TEACHERS')}
           {renderNavItem(View.ACCESS_CONTROL, 'Access Control', <ShieldCheck size={18} />, 'MANAGE_ROLES')}
-          {renderNavItem(View.SQL_EDITOR, 'SQL Editor', <Terminal size={18} />, 'ACCESS_SQL_EDITOR')}
+          {renderNavItem(View.TASK_MANAGEMENT, 'Task Management', <ListTodo size={18} />, 'VIEW_TEACHER_TASKS')}
 
-          <button className="w-full flex items-center gap-3 px-3 py-2 rounded-md text-supabase-muted hover:text-supabase-text hover:bg-supabase-hover text-sm font-medium mb-1">
+          {renderNavItem(View.SQL_EDITOR, 'SQL Editor', <Terminal size={18} />, 'ACCESS_SQL_EDITOR')}
+          {renderNavItem(View.MCP_CONSOLE, 'MCP Console', <Cpu size={18} />, 'ACCESS_SQL_EDITOR')}
+
+          <div className="mt-6 mb-2 text-xs font-semibold text-supabase-muted uppercase tracking-wider px-3 pb-2">
+            Finance
+          </div>
+          
+          <div className="mb-1">
+            <button 
+              onClick={() => setIsPayrollExpanded(!isPayrollExpanded)}
+              className={`w-full flex items-center justify-between px-3 py-2 rounded-md transition-colors text-sm font-medium 
+                ${payrollViews.includes(currentView) ? 'text-supabase-text' : 'text-supabase-muted hover:text-supabase-text hover:bg-supabase-hover'}`}
+            >
+              <div className="flex items-center gap-3">
+                <Wallet size={18} className={payrollViews.includes(currentView) ? 'text-supabase-green' : ''} />
+                <span>Payroll</span>
+              </div>
+              {isPayrollExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+            </button>
+            
+            {isPayrollExpanded && (
+              <div className="mt-1 space-y-0.5">
+                {renderNavItem(View.PAYROLL, 'Financial Ledger', null, 'ACCESS_SQL_EDITOR', true)}
+                {renderNavItem(View.PAYROLL_SETUP, 'Salary Structure', null, 'ACCESS_SQL_EDITOR', true)}
+                {renderNavItem(View.PAYROLL_BASE_SALARY, 'Base Scale Registry', null, 'ACCESS_SQL_EDITOR', true)}
+                {renderNavItem(View.PAYROLL_DEDUCTIONS, 'Deduction Rules', null, 'ACCESS_SQL_EDITOR', true)}
+              </div>
+            )}
+          </div>
+
+          <div className="mt-6 mb-2 text-xs font-semibold text-supabase-muted uppercase tracking-wider px-3 pb-2">
+            Account
+          </div>
+          
+          {renderNavItem(View.MY_TASK, 'My Task', <ListChecks size={18} />, 'VIEW_TEACHER_TASKS')}
+          
+          <button 
+            onClick={() => handleNavClick(View.DASHBOARD)} 
+            className="w-full flex items-center gap-3 px-3 py-2 rounded-md text-supabase-muted hover:text-supabase-text hover:bg-supabase-hover text-sm font-medium mb-1"
+          >
+            <User size={18} />
+            <span>My Profile</span>
+          </button>
+
+          <button className="w-full flex items-center gap-3 px-3 py-2 rounded-md text-supabase-muted hover:text-supabase-text hover:bg-supabase-hover text-sm font-medium mt-4">
             <Database size={18} />
             <span>Database</span>
           </button>
