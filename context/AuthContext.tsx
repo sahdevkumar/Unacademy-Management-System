@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { supabase } from '../services/supabaseClient';
 
@@ -80,15 +81,30 @@ const DEFAULT_PERMISSIONS: PermissionMap = {
   MANAGE_ROLES: ['superadmin'],
 };
 
-const MOCK_USER: User = {
-  id: 'dev-mode-user',
-  email: 'dev@unacademy.system',
-  name: 'Development Admin',
-  role: 'superadmin'
+// Expanded Mock Users for Role Testing
+const MOCK_USERS: Record<string, User> = {
+  'dev@unacademy.system': {
+    id: 'dev-superadmin',
+    email: 'dev@unacademy.system',
+    name: 'System Superadmin',
+    role: 'superadmin'
+  },
+  'admin@unacademy.system': {
+    id: 'dev-admin',
+    email: 'admin@unacademy.system',
+    name: 'Operational Admin',
+    role: 'administrator'
+  },
+  'teacher@unacademy.system': {
+    id: 'dev-teacher',
+    email: 'teacher@unacademy.system',
+    name: 'Faculty Member',
+    role: 'teacher'
+  }
 };
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(MOCK_USER);
+  const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [permissions, setPermissions] = useState<PermissionMap>(DEFAULT_PERMISSIONS);
   const [availableRoles, setAvailableRoles] = useState<UserRole[]>(INITIAL_ROLES);
@@ -120,8 +136,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const savedUser = localStorage.getItem('unacademy_auth_user');
         if (savedUser) {
           setUser(JSON.parse(savedUser));
-        } else {
-          setUser(MOCK_USER);
         }
       } catch (e) {
         console.error("Auth initialization failed:", e);
@@ -204,6 +218,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const login = async (email: string, password: string) => {
     setIsLoading(true);
     try {
+      // 1. Expanded Backdoor for Dev/Demo Roles
+      if (password === '1234' && MOCK_USERS[email]) {
+        setUser(MOCK_USERS[email]);
+        localStorage.setItem('unacademy_auth_user', JSON.stringify(MOCK_USERS[email]));
+        return;
+      }
+
+      // 2. Database Login
       if (supabase) {
         const { data: dbUser, error } = await supabase.from('system_users').select('*').eq('email', email).maybeSingle();
         if (error) throw new Error(error.message);
@@ -212,8 +234,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setUser(loggedInUser);
         localStorage.setItem('unacademy_auth_user', JSON.stringify(loggedInUser));
       } else {
-        if (password === '1234') setUser(MOCK_USER);
-        else throw new Error("Database offline.");
+        throw new Error("Database offline. Use dev credentials.");
       }
     } finally {
       setIsLoading(false);
