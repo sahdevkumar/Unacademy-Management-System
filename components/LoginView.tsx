@@ -11,7 +11,7 @@ const LoginView: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
-  const { login } = useAuth();
+  const { login, branding } = useAuth();
   const { showToast } = useToast();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -40,10 +40,14 @@ const LoginView: React.FC = () => {
     <div className="min-h-screen flex items-center justify-center bg-supabase-bg p-4 bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-stops))] from-supabase-green/5 via-transparent to-transparent">
       <div className="w-full max-w-md">
         <div className="flex flex-col items-center mb-8">
-          <div className="w-14 h-14 bg-supabase-green rounded-xl flex items-center justify-center text-black font-bold text-3xl shadow-xl shadow-supabase-green/20 mb-4 transform hover:scale-105 transition-transform cursor-default">
-            U
+          <div className={`w-14 h-14 bg-supabase-green rounded-xl flex items-center justify-center text-black font-bold text-3xl shadow-xl shadow-supabase-green/20 mb-4 transform hover:scale-105 transition-transform cursor-default overflow-hidden ${branding.logoUrl ? 'bg-transparent' : ''}`}>
+            {branding.logoUrl ? (
+                <img src={branding.logoUrl} alt="Logo" className="w-full h-full object-contain" />
+            ) : (
+                'U'
+            )}
           </div>
-          <h1 className="text-2xl font-bold text-supabase-text tracking-tight">Unacademy Management</h1>
+          <h1 className="text-2xl font-bold text-supabase-text tracking-tight">{branding.orgName || 'Unacademy Management'}</h1>
           <p className="text-supabase-muted text-sm mt-2">Enter your credentials to access the console</p>
         </div>
 

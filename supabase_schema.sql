@@ -39,10 +39,18 @@ CREATE TABLE IF NOT EXISTS public.enquiry_leads (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
 );
 
+-- 4. System Configuration Key-Value Store
+CREATE TABLE IF NOT EXISTS public.system_config (
+    key TEXT PRIMARY KEY,
+    value JSONB,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+);
+
 -- Enable RLS
 ALTER TABLE public.attendance_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.outreach_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.enquiry_leads ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.system_config ENABLE ROW LEVEL SECURITY;
 
 -- Policies (Public for demo mode)
 CREATE POLICY "Allow select for everyone" ON public.attendance_logs FOR SELECT USING (true);
@@ -53,3 +61,5 @@ CREATE POLICY "Allow upsert outreach" ON public.outreach_logs FOR ALL USING (tru
 
 CREATE POLICY "Allow select enquiry" ON public.enquiry_leads FOR SELECT USING (true);
 CREATE POLICY "Allow upsert enquiry" ON public.enquiry_leads FOR ALL USING (true) WITH CHECK (true);
+
+CREATE POLICY "Allow all access system_config" ON public.system_config FOR ALL USING (true) WITH CHECK (true);

@@ -1,8 +1,11 @@
 
-import React, { useState } from 'react';
-/* Added ChevronRight to imports */
-import { Shield, Trash2, ShieldPlus, Save, Loader2, Building2, Plus, Database, CloudCheck, Layout, Briefcase, Award, Link2, Check, ChevronRight } from 'lucide-react';
-import { useAuth } from '../context/AuthContext';
+import React, { useState, useEffect, useRef } from 'react';
+import { 
+  Shield, Trash2, ShieldPlus, Save, Loader2, Building2, Plus, Database, 
+  CloudCheck, Layout, Briefcase, Award, Link2, Check, ChevronRight, 
+  Palette, Globe, MapPin, Mail, Phone, Image as ImageIcon, Sparkles, Upload, X
+} from 'lucide-react';
+import { useAuth, BrandingConfig } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { supabase } from '../services/supabaseClient';
 
@@ -11,18 +14,32 @@ const SettingsView: React.FC = () => {
     availableRoles, deleteRole, addRole, 
     departments, addDepartment, deleteDepartment, 
     designations, addDesignation, deleteDesignation,
-    departmentDesignationMap, updateDeptMap, saveSystemConfig
+    departmentDesignationMap, updateDeptMap, saveSystemConfig,
+    branding: globalBranding, updateBranding
   } = useAuth();
   const { showToast } = useToast();
   
-  const [activeTab, setActiveTab] = useState<'roles' | 'departments' | 'designations' | 'mappings'>('roles');
+  const [activeTab, setActiveTab] = useState<'roles' | 'departments' | 'designations' | 'mappings' | 'branding'>('roles');
   const [newRole, setNewRole] = useState('');
   const [newDept, setNewDept] = useState('');
   const [newDesig, setNewDesig] = useState('');
   
   const [isSaving, setIsSaving] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [uploadingField, setUploadingField] = useState<'logoUrl' | 'iconUrl' | null>(null);
   const [selectedMappingDept, setSelectedMappingDept] = useState<string | null>(null);
+
+  // File Input Refs
+  const logoInputRef = useRef<HTMLInputElement>(null);
+  const iconInputRef = useRef<HTMLInputElement>(null);
+
+  // Branding State - Initialized from global context
+  const [branding, setBranding] = useState<BrandingConfig>(globalBranding);
+
+  // Sync local state when global context updates (e.g. initial load)
+  useEffect(() => {
+    setBranding(globalBranding);
+  }, [globalBranding]);
 
   const handleAddRole = async () => {
     if (!newRole.trim()) return;
@@ -55,11 +72,55 @@ const SettingsView: React.FC = () => {
     setIsSaving(true);
     try {
       await saveSystemConfig();
-      showToast("Infrastructure state persisted to database", "success");
+      await updateBranding(branding);
+      showToast("Infrastructure & Branding state persisted to database", "success");
     } catch (e: any) {
       showToast("Sync failed: " + e.message, "error");
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, field: 'logoUrl' | 'iconUrl') => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!supabase) {
+        showToast("Storage unavailable in demo mode.", "error");
+        return;
+    }
+
+    setUploadingField(field);
+    try {
+        const fileExt = file.name.split('.').pop();
+        const fileName = `${field}_${Date.now()}.${fileExt}`;
+        const filePath = `${fileName}`;
+
+        // Upload to 'branding-assets' bucket
+        const { error: uploadError } = await supabase.storage
+            .from('branding-assets')
+            .upload(filePath, file);
+
+        if (uploadError) {
+            // Check if bucket exists error, if so, just warn
+            if (uploadError.message.includes('bucket not found')) {
+                 throw new Error("Bucket 'branding-assets' not found. Please create it in Supabase Storage.");
+            }
+            throw uploadError;
+        }
+
+        const { data } = supabase.storage
+            .from('branding-assets')
+            .getPublicUrl(filePath);
+
+        setBranding(prev => ({ ...prev, [field]: data.publicUrl }));
+        showToast("Asset uploaded successfully.", "success");
+    } catch (error: any) {
+        showToast(`Upload failed: ${error.message}`, "error");
+    } finally {
+        setUploadingField(null);
+        // Reset input
+        if (e.target) e.target.value = '';
     }
   };
 
@@ -102,7 +163,8 @@ const SettingsView: React.FC = () => {
           { id: 'roles', icon: ShieldPlus, label: 'Roles' },
           { id: 'departments', icon: Building2, label: 'Departments' },
           { id: 'designations', icon: Briefcase, label: 'Designations' },
-          { id: 'mappings', icon: Link2, label: 'Relationship Mapping' }
+          { id: 'mappings', icon: Link2, label: 'Relationship Mapping' },
+          { id: 'branding', icon: Palette, label: 'Branding & Identity' }
         ].map(tab => (
           <button 
             key={tab.id}
@@ -229,6 +291,202 @@ const SettingsView: React.FC = () => {
                   <p className="text-xs font-black uppercase tracking-widest">Select a department to manage role mappings</p>
                 </div>
               )}
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'branding' && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 animate-in zoom-in-95 duration-300">
+            {/* Identity & Visuals */}
+            <div className="space-y-6">
+              <div className="bg-supabase-panel border border-supabase-border rounded-2xl p-6 shadow-sm">
+                <h3 className="text-[10px] font-black uppercase text-supabase-muted tracking-[0.2em] mb-6 flex items-center gap-2">
+                  <Globe size={14} className="text-supabase-green" /> Corporate Identity
+                </h3>
+                <div className="space-y-4">
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold text-supabase-muted uppercase">Organization Name</label>
+                    <input 
+                      type="text" 
+                      value={branding.orgName} 
+                      onChange={e => setBranding({...branding, orgName: e.target.value})} 
+                      className="w-full bg-supabase-sidebar border border-supabase-border rounded-xl px-4 py-3 text-sm text-supabase-text focus:border-supabase-green outline-none" 
+                      placeholder="e.g. Unacademy Systems"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold text-supabase-muted uppercase">Primary Unit / Currency</label>
+                    <input 
+                      type="text" 
+                      value={branding.unit} 
+                      onChange={e => setBranding({...branding, unit: e.target.value})} 
+                      className="w-full bg-supabase-sidebar border border-supabase-border rounded-xl px-4 py-3 text-sm text-supabase-text focus:border-supabase-green outline-none" 
+                      placeholder="e.g. USD, EUR, INR"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-supabase-panel border border-supabase-border rounded-2xl p-6 shadow-sm">
+                <h3 className="text-[10px] font-black uppercase text-supabase-muted tracking-[0.2em] mb-6 flex items-center gap-2">
+                  <Palette size={14} className="text-purple-400" /> Visual Assets
+                </h3>
+                <div className="space-y-6">
+                  {/* Logo Upload */}
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-bold text-supabase-muted uppercase">Organization Logo</label>
+                    <div className="flex gap-4">
+                        <div 
+                            onClick={() => logoInputRef.current?.click()}
+                            className="w-24 h-24 rounded-2xl bg-supabase-sidebar border-2 border-dashed border-supabase-border flex items-center justify-center cursor-pointer hover:border-supabase-green hover:bg-supabase-green/5 transition-all relative group overflow-hidden"
+                        >
+                            {branding.logoUrl ? (
+                                <>
+                                    <img src={branding.logoUrl} alt="Logo" className="w-full h-full object-contain p-2" />
+                                    <div className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <Upload size={20} className="text-white" />
+                                    </div>
+                                </>
+                            ) : (
+                                <div className="flex flex-col items-center gap-2 text-supabase-muted group-hover:text-supabase-green">
+                                    <ImageIcon size={24} />
+                                    <span className="text-[8px] font-black uppercase">Upload</span>
+                                </div>
+                            )}
+                            {uploadingField === 'logoUrl' && (
+                                <div className="absolute inset-0 bg-black/80 flex items-center justify-center">
+                                    <Loader2 size={24} className="text-supabase-green animate-spin" />
+                                </div>
+                            )}
+                        </div>
+                        <div className="flex-1 flex flex-col justify-center space-y-2">
+                            <input 
+                                type="file" 
+                                ref={logoInputRef} 
+                                className="hidden" 
+                                accept="image/*"
+                                onChange={(e) => handleFileUpload(e, 'logoUrl')} 
+                            />
+                            <div className="flex items-center gap-2">
+                                <input 
+                                    type="text" 
+                                    value={branding.logoUrl} 
+                                    onChange={e => setBranding({...branding, logoUrl: e.target.value})} 
+                                    className="w-full bg-supabase-sidebar border border-supabase-border rounded-lg px-3 py-2 text-[10px] text-supabase-muted focus:border-supabase-green outline-none font-mono" 
+                                    placeholder="https://... or upload"
+                                />
+                                {branding.logoUrl && (
+                                    <button 
+                                        onClick={() => setBranding(prev => ({...prev, logoUrl: ''}))}
+                                        className="p-2 text-supabase-muted hover:text-red-400 bg-supabase-sidebar border border-supabase-border rounded-lg"
+                                    >
+                                        <Trash2 size={14} />
+                                    </button>
+                                )}
+                            </div>
+                            <p className="text-[9px] text-supabase-muted">Recommended: 200x200px PNG transparent.</p>
+                        </div>
+                    </div>
+                  </div>
+
+                  {/* Icon Upload */}
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-bold text-supabase-muted uppercase">Favicon / App Icon</label>
+                    <div className="flex gap-4">
+                        <div 
+                            onClick={() => iconInputRef.current?.click()}
+                            className="w-16 h-16 rounded-xl bg-supabase-sidebar border-2 border-dashed border-supabase-border flex items-center justify-center cursor-pointer hover:border-supabase-green hover:bg-supabase-green/5 transition-all relative group overflow-hidden"
+                        >
+                            {branding.iconUrl ? (
+                                <>
+                                    <img src={branding.iconUrl} alt="Icon" className="w-full h-full object-contain p-1" />
+                                    <div className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <Upload size={16} className="text-white" />
+                                    </div>
+                                </>
+                            ) : (
+                                <div className="flex flex-col items-center gap-1 text-supabase-muted group-hover:text-supabase-green">
+                                    <Sparkles size={18} />
+                                </div>
+                            )}
+                            {uploadingField === 'iconUrl' && (
+                                <div className="absolute inset-0 bg-black/80 flex items-center justify-center">
+                                    <Loader2 size={18} className="text-supabase-green animate-spin" />
+                                </div>
+                            )}
+                        </div>
+                        <div className="flex-1 flex flex-col justify-center space-y-2">
+                            <input 
+                                type="file" 
+                                ref={iconInputRef} 
+                                className="hidden" 
+                                accept="image/*"
+                                onChange={(e) => handleFileUpload(e, 'iconUrl')} 
+                            />
+                            <div className="flex items-center gap-2">
+                                <input 
+                                    type="text" 
+                                    value={branding.iconUrl} 
+                                    onChange={e => setBranding({...branding, iconUrl: e.target.value})} 
+                                    className="w-full bg-supabase-sidebar border border-supabase-border rounded-lg px-3 py-2 text-[10px] text-supabase-muted focus:border-supabase-green outline-none font-mono" 
+                                    placeholder="https://... or upload"
+                                />
+                                {branding.iconUrl && (
+                                    <button 
+                                        onClick={() => setBranding(prev => ({...prev, iconUrl: ''}))}
+                                        className="p-2 text-supabase-muted hover:text-red-400 bg-supabase-sidebar border border-supabase-border rounded-lg"
+                                    >
+                                        <Trash2 size={14} />
+                                    </button>
+                                )}
+                            </div>
+                            <p className="text-[9px] text-supabase-muted">Recommended: 32x32px or 64x64px ICO/PNG.</p>
+                        </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Contact Info */}
+            <div className="space-y-6">
+              <div className="bg-supabase-panel border border-supabase-border rounded-2xl p-6 shadow-sm h-full flex flex-col">
+                <h3 className="text-[10px] font-black uppercase text-supabase-muted tracking-[0.2em] mb-6 flex items-center gap-2">
+                  <MapPin size={14} className="text-blue-400" /> Operational Contact
+                </h3>
+                <div className="space-y-6 flex-1">
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold text-supabase-muted uppercase flex items-center gap-2"><Mail size={12} /> Official Email</label>
+                    <input 
+                      type="email" 
+                      value={branding.contactEmail} 
+                      onChange={e => setBranding({...branding, contactEmail: e.target.value})} 
+                      className="w-full bg-supabase-sidebar border border-supabase-border rounded-xl px-4 py-3 text-sm text-supabase-text focus:border-supabase-green outline-none" 
+                      placeholder="admin@organization.com"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold text-supabase-muted uppercase flex items-center gap-2"><Phone size={12} /> Support Phone</label>
+                    <input 
+                      type="text" 
+                      value={branding.contactPhone} 
+                      onChange={e => setBranding({...branding, contactPhone: e.target.value})} 
+                      className="w-full bg-supabase-sidebar border border-supabase-border rounded-xl px-4 py-3 text-sm text-supabase-text focus:border-supabase-green outline-none" 
+                      placeholder="+1 (555) 000-0000"
+                    />
+                  </div>
+                  <div className="space-y-1.5 flex-1 flex flex-col">
+                    <label className="text-[10px] font-bold text-supabase-muted uppercase">Physical Address</label>
+                    <textarea 
+                      rows={5}
+                      value={branding.address} 
+                      onChange={e => setBranding({...branding, address: e.target.value})} 
+                      className="w-full bg-supabase-sidebar border border-supabase-border rounded-xl px-4 py-3 text-sm text-supabase-text focus:border-supabase-green outline-none resize-none flex-1" 
+                      placeholder="Headquarters address..."
+                    />
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         )}

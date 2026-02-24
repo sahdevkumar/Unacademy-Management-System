@@ -48,7 +48,7 @@ interface SidebarProps {
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, isOpen = false, onClose }) => {
-  const { hasPermission, user, designations } = useAuth();
+  const { hasPermission, user, branding } = useAuth();
   const [isScheduleExpanded, setIsScheduleExpanded] = useState(true);
   const [isTeacherExpanded, setIsTeacherExpanded] = useState(false);
   const [isPayrollExpanded, setIsPayrollExpanded] = useState(false);
@@ -111,11 +111,15 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, isOpen = f
       `}>
         {/* Project Header */}
         <div className="h-14 flex items-center px-4 border-b border-supabase-border">
-          <div className={`w-8 h-8 rounded flex items-center justify-center text-black font-bold mr-3 transition-colors ${user?.role === 'superadmin' ? 'bg-purple-400' : 'bg-supabase-green'}`}>
-            {user?.role === 'superadmin' ? 'S' : 'U'}
+          <div className={`w-8 h-8 rounded flex items-center justify-center text-black font-bold mr-3 transition-colors overflow-hidden ${!branding.logoUrl ? (user?.role === 'superadmin' ? 'bg-purple-400' : 'bg-supabase-green') : 'bg-transparent'}`}>
+            {branding.logoUrl ? (
+                <img src={branding.logoUrl} alt="Logo" className="w-full h-full object-contain" />
+            ) : (
+                user?.role === 'superadmin' ? 'S' : 'U'
+            )}
           </div>
           <div className="min-w-0">
-            <div className="text-sm font-medium text-supabase-text truncate">Unacademy</div>
+            <div className="text-sm font-medium text-supabase-text truncate">{branding.orgName || 'Unacademy'}</div>
             <div className="text-[10px] text-supabase-muted uppercase tracking-tighter truncate">
                 {user?.role === 'superadmin' ? 'System Superadmin' : 'Management System'}
             </div>

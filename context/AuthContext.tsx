@@ -11,6 +11,26 @@ export interface User {
   id: string;
 }
 
+export interface BrandingConfig {
+  orgName: string;
+  logoUrl: string;
+  iconUrl: string;
+  unit: string;
+  contactEmail: string;
+  contactPhone: string;
+  address: string;
+}
+
+const DEFAULT_BRANDING: BrandingConfig = {
+  orgName: 'Unacademy Management',
+  logoUrl: '',
+  iconUrl: '',
+  unit: 'USD',
+  contactEmail: '',
+  contactPhone: '',
+  address: ''
+};
+
 export type PermissionKey = 
   | 'VIEW_DASHBOARD'
   | 'VIEW_SCHEDULE_LIST'
@@ -40,6 +60,7 @@ interface AuthContextType {
   departments: string[];
   designations: string[];
   departmentDesignationMap: Record<string, string[]>;
+  branding: BrandingConfig;
   updatePermission: (key: PermissionKey, roles: UserRole[]) => Promise<void>;
   addRole: (roleName: string) => Promise<void>;
   deleteRole: (roleName: string) => Promise<void>;
@@ -50,6 +71,7 @@ interface AuthContextType {
   updateDeptMap: (dept: string, selectedDesignations: string[]) => void;
   saveSystemConfig: () => Promise<void>;
   saveSystemRoles: () => Promise<void>;
+  updateBranding: (config: BrandingConfig) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -111,6 +133,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [departments, setDepartments] = useState<string[]>(INITIAL_DEPARTMENTS);
   const [designations, setDesignations] = useState<string[]>(INITIAL_DESIGNATIONS);
   const [departmentDesignationMap, setDepartmentDesignationMap] = useState<Record<string, string[]>>(DEFAULT_DEPT_MAP);
+  const [branding, setBranding] = useState<BrandingConfig>(DEFAULT_BRANDING);
 
   useEffect(() => {
     const initializeAuth = async () => {
@@ -131,6 +154,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
           const { data: mapData } = await supabase.from('system_config').select('value').eq('key', 'dept_designation_map').maybeSingle();
           if (mapData?.value) setDepartmentDesignationMap(mapData.value as Record<string, string[]>);
+
+          const { data: brandData } = await supabase.from('system_config').select('value').eq('key', 'branding_identity').maybeSingle();
+          if (brandData?.value) setBranding(brandData.value as BrandingConfig);
         }
 
         const savedUser = localStorage.getItem('unacademy_auth_user');
@@ -167,6 +193,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       await supabase.from('system_config').upsert({ key: 'system_departments', value: departments }, { onConflict: 'key' });
       await supabase.from('system_config').upsert({ key: 'system_designations', value: designations }, { onConflict: 'key' });
       await supabase.from('system_config').upsert({ key: 'dept_designation_map', value: departmentDesignationMap }, { onConflict: 'key' });
+    }
+  };
+
+  const updateBranding = async (config: BrandingConfig) => {
+    setBranding(config);
+    if (supabase) {
+        await supabase.from('system_config').upsert({ key: 'branding_identity', value: config }, { onConflict: 'key' });
     }
   };
 
@@ -248,8 +281,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   return (
     <AuthContext.Provider value={{ 
-      user, isAuthenticated: !!user, login, logout, isLoading, hasPermission, permissions, availableRoles, departments, designations, departmentDesignationMap,
-      updatePermission, addRole, deleteRole, addDepartment, deleteDepartment, addDesignation, deleteDesignation, updateDeptMap, saveSystemConfig, saveSystemRoles 
+      user, isAuthenticated: !!user, login, logout, isLoading, hasPermission, permissions, availableRoles, departments, designations, departmentDesignationMap, branding,
+      updatePermission, addRole, deleteRole, addDepartment, deleteDepartment, addDesignation, deleteDesignation, updateDeptMap, saveSystemConfig, saveSystemRoles, updateBranding
     }}>
       {children}
     </AuthContext.Provider>
