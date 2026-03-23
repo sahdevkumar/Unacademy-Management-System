@@ -70,6 +70,8 @@ const SettingsView: React.FC = () => {
   const [showCommandsModal, setShowCommandsModal] = useState(false);
   const [fetchedCommands, setFetchedCommands] = useState<any[]>([]);
   const [isFetchingCommands, setIsFetchingCommands] = useState(false);
+  const [dbStatus, setDbStatus] = useState<'Checking' | 'Connected' | 'Error' | 'Disconnected'>('Checking');
+  const [dbError, setDbError] = useState<string | null>(null);
 
   const [cloudConfig, setCloudConfig] = useState({
     baseUrl: '',
@@ -83,6 +85,7 @@ const SettingsView: React.FC = () => {
   });
 
   useEffect(() => {
+    checkDatabaseConnection();
     if (activeTab === 'biometric') {
       fetchDevices();
       fetchCloudConfig();
@@ -91,6 +94,30 @@ const SettingsView: React.FC = () => {
       fetchAcademicData();
     }
   }, [activeTab]);
+
+  const checkDatabaseConnection = async (manual = false) => {
+    if (!supabase) {
+      setDbStatus('Disconnected');
+      setDbError('Supabase client not initialized. Please ensure VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are set in the Secrets menu and you have clicked "Apply changes".');
+      if (manual) showToast('Supabase client not initialized. Check Secrets.', 'error');
+      return;
+    }
+
+    setDbStatus('Checking');
+    try {
+      // Perform a simple query to verify connection
+      const { error } = await supabase.from('system_config').select('key').limit(1);
+      if (error) throw error;
+      setDbStatus('Connected');
+      setDbError(null);
+      if (manual) showToast('Database connected successfully', 'success');
+    } catch (e: any) {
+      setDbStatus('Error');
+      setDbError(e.message || 'Unknown connection error');
+      if (manual) showToast(`Connection failed: ${e.message || 'Unknown error'}`, 'error');
+      console.error("Database connection check failed:", e);
+    }
+  };
 
   const fetchAcademicData = async () => {
     if (!supabase) return;
@@ -774,18 +801,44 @@ const SettingsView: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="bg-supabase-panel border border-supabase-border border-dashed rounded-2xl p-6">
-                  <h4 className="text-[10px] font-black uppercase tracking-widest text-supabase-muted mb-3 flex items-center gap-2">
-                    <Activity size={12} /> System Status
-                  </h4>
+                <div className="bg-supabase-panel border border-supabase-border border-dashed rounded-2xl p-6 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-[10px] font-black uppercase tracking-widest text-supabase-muted flex items-center gap-2">
+                      <Activity size={12} /> System Status
+                    </h4>
+                    <button 
+                      onClick={() => checkDatabaseConnection(true)}
+                      className="p-1 text-supabase-muted hover:text-supabase-green transition-colors"
+                      title="Refresh Status"
+                    >
+                      <RefreshCw size={10} className={dbStatus === 'Checking' ? 'animate-spin' : ''} />
+                    </button>
+                  </div>
+                  
                   <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] text-supabase-muted">Database</span>
+                      <div className="flex items-center gap-1.5">
+                        <div className={`w-1.5 h-1.5 rounded-full ${
+                          dbStatus === 'Connected' ? 'bg-supabase-green shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 
+                          dbStatus === 'Checking' ? 'bg-orange-400 animate-pulse' : 
+                          'bg-red-500'
+                        }`} />
+                        <span className={`text-[11px] font-bold ${
+                          dbStatus === 'Connected' ? 'text-supabase-green' : 
+                          dbStatus === 'Checking' ? 'text-orange-400' : 
+                          'text-red-500'
+                        }`}>{dbStatus}</span>
+                      </div>
+                    </div>
+                    {dbError && (
+                      <div className="p-2 bg-red-500/10 border border-red-500/20 rounded-lg">
+                        <p className="text-[9px] text-red-400 leading-tight">{dbError}</p>
+                      </div>
+                    )}
                     <div className="flex items-center justify-between">
                       <span className="text-[11px] text-supabase-muted">Active Devices</span>
                       <span className="text-[11px] font-bold text-supabase-text">{devices.filter(d => d.status === 'Online').length}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-[11px] text-supabase-muted">Total Users Synced</span>
-                      <span className="text-[11px] font-bold text-supabase-text">1,240</span>
                     </div>
                   </div>
                 </div>
