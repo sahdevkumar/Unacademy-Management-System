@@ -31,7 +31,7 @@ const SettingsView: React.FC = () => {
   } = useAuth();
   const { showToast } = useToast();
   
-  const [activeTab, setActiveTab] = useState<'roles' | 'departments' | 'designations' | 'mappings' | 'biometric' | 'academic'>('roles');
+  const [activeTab, setActiveTab] = useState<'roles' | 'departments' | 'designations' | 'mappings' | 'biometric' | 'academic' | 'system'>('roles');
   const [newRole, setNewRole] = useState('');
   const [newDept, setNewDept] = useState('');
   const [newDesig, setNewDesig] = useState('');
@@ -47,6 +47,7 @@ const SettingsView: React.FC = () => {
   
   const [isSaving, setIsSaving] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isSeeding, setIsSeeding] = useState(false);
   const [selectedMappingDept, setSelectedMappingDept] = useState<string | null>(null);
 
   // Biometric State
@@ -145,6 +146,71 @@ const SettingsView: React.FC = () => {
       showToast("Failed to fetch academic data: " + e.message, "error");
     } finally {
       setIsFetchingAcademic(false);
+    }
+  };
+
+  const handleSeedData = async () => {
+    if (!supabase) return;
+    setIsSeeding(true);
+    try {
+      // Seed Classes
+      const classesToSeed = [
+        { name: 'Class 1', section: 'A', room_no: '101', level: 1 },
+        { name: 'Class 2', section: 'A', room_no: '102', level: 2 },
+        { name: 'Class 3', section: 'A', room_no: '103', level: 3 },
+        { name: 'Class 4', section: 'A', room_no: '104', level: 4 },
+        { name: 'Class 5', section: 'A', room_no: '105', level: 5 }
+      ];
+      
+      const { error: classError } = await supabase.from('classes').upsert(classesToSeed, { onConflict: 'name' });
+      if (classError) throw classError;
+
+      // Seed Subjects
+      const subjectsToSeed = [
+        { name: 'Mathematics' },
+        { name: 'Science' },
+        { name: 'English' },
+        { name: 'History' },
+        { name: 'Geography' }
+      ];
+      const { error: subjectError } = await supabase.from('subjects').upsert(subjectsToSeed, { onConflict: 'name' });
+      if (subjectError) throw subjectError;
+
+      // Seed Sections
+      const sectionsToSeed = [
+        { name: 'A' },
+        { name: 'B' },
+        { name: 'C' }
+      ];
+      const { error: sectionError } = await supabase.from('sections').upsert(sectionsToSeed, { onConflict: 'name' });
+      if (sectionError) throw sectionError;
+
+      showToast("Seed data applied successfully", "success");
+      fetchAcademicData();
+    } catch (e: any) {
+      showToast("Failed to seed data: " + e.message, "error");
+    } finally {
+      setIsSeeding(false);
+    }
+  };
+
+  const handleSyncAllDevices = async () => {
+    if (devices.length === 0) {
+      showToast("No devices to sync", "error");
+      return;
+    }
+    
+    setIsProcessing(true);
+    try {
+      for (const device of devices) {
+        await syncData(device.id, 'logs');
+        await syncData(device.id, 'users');
+      }
+      showToast("All devices synced successfully", "success");
+    } catch (e: any) {
+      showToast("Sync all failed: " + e.message, "error");
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -620,7 +686,8 @@ const SettingsView: React.FC = () => {
           { id: 'designations', icon: Briefcase, label: 'Designations' },
           { id: 'mappings', icon: Link2, label: 'Relationship Mapping' },
           { id: 'biometric', icon: Fingerprint, label: 'Biometric System' },
-          { id: 'academic', icon: BookOpen, label: 'Academic' }
+          { id: 'academic', icon: BookOpen, label: 'Academic' },
+          { id: 'system', icon: Server, label: 'System' }
         ].map(tab => (
           <button 
             key={tab.id}
@@ -900,9 +967,19 @@ const SettingsView: React.FC = () => {
               <div className="md:col-span-2 space-y-4">
                 <div className="flex items-center justify-between mb-2">
                   <h3 className="text-xs font-black uppercase tracking-widest text-supabase-text">Managed Devices</h3>
-                  <button onClick={fetchDevices} className="p-1.5 text-supabase-muted hover:text-supabase-green transition-colors">
-                    <RefreshCw size={14} className={isFetchingDevices ? 'animate-spin' : ''} />
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button 
+                      onClick={handleSyncAllDevices}
+                      disabled={isProcessing || devices.length === 0}
+                      className="flex items-center gap-2 px-3 py-1.5 bg-supabase-sidebar border border-supabase-border text-supabase-muted hover:text-supabase-green hover:border-supabase-green rounded-lg text-[9px] font-black uppercase tracking-widest transition-all disabled:opacity-50"
+                    >
+                      {isProcessing ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
+                      Sync All
+                    </button>
+                    <button onClick={fetchDevices} className="p-1.5 text-supabase-muted hover:text-supabase-green transition-colors">
+                      <RefreshCw size={14} className={isFetchingDevices ? 'animate-spin' : ''} />
+                    </button>
+                  </div>
                 </div>
 
                 {isFetchingDevices ? (
@@ -1219,6 +1296,162 @@ const SettingsView: React.FC = () => {
                     ))}
                   </div>
                 )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'system' && (
+          <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-400">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              {/* System Health Section */}
+              <div className="bg-supabase-panel border border-supabase-border rounded-2xl overflow-hidden flex flex-col">
+                <div className="px-6 py-4 border-b border-supabase-border bg-supabase-sidebar flex items-center justify-between">
+                  <h3 className="text-xs font-black uppercase tracking-widest text-supabase-text flex items-center gap-2">
+                    <Activity size={14} className="text-supabase-green" />
+                    System Health & Connectivity
+                  </h3>
+                  <button 
+                    onClick={() => checkDatabaseConnection(true)}
+                    className="p-1.5 text-supabase-muted hover:text-supabase-green transition-colors"
+                  >
+                    <RefreshCw size={14} className={dbStatus === 'Checking' ? 'animate-spin' : ''} />
+                  </button>
+                </div>
+                <div className="p-6 space-y-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="p-4 bg-supabase-sidebar border border-supabase-border rounded-xl space-y-2">
+                      <p className="text-[9px] font-black text-supabase-muted uppercase tracking-widest">Database Status</p>
+                      <div className="flex items-center gap-2">
+                        <div className={`w-2 h-2 rounded-full ${
+                          dbStatus === 'Connected' ? 'bg-supabase-green shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 
+                          dbStatus === 'Checking' ? 'bg-orange-400 animate-pulse' : 
+                          'bg-red-500'
+                        }`} />
+                        <span className={`text-sm font-black uppercase tracking-tight ${
+                          dbStatus === 'Connected' ? 'text-supabase-green' : 
+                          dbStatus === 'Checking' ? 'text-orange-400' : 
+                          'text-red-500'
+                        }`}>{dbStatus}</span>
+                      </div>
+                    </div>
+                    <div className="p-4 bg-supabase-sidebar border border-supabase-border rounded-xl space-y-2">
+                      <p className="text-[9px] font-black text-supabase-muted uppercase tracking-widest">Auth Service</p>
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 rounded-full bg-supabase-green shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
+                        <span className="text-sm font-black uppercase tracking-tight text-supabase-green">Operational</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {dbError && (
+                    <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl flex gap-3">
+                      <WifiOff size={18} className="text-red-400 shrink-0" />
+                      <div className="space-y-1">
+                        <p className="text-[10px] font-black text-red-400 uppercase tracking-widest">Connection Error</p>
+                        <p className="text-xs text-red-300/80 leading-relaxed font-mono">{dbError}</p>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="space-y-4">
+                    <h4 className="text-[10px] font-black uppercase tracking-widest text-supabase-muted">Environment Variables</h4>
+                    <div className="space-y-2">
+                      {[
+                        { name: 'VITE_SUPABASE_URL', status: !!supabase },
+                        { name: 'VITE_SUPABASE_ANON_KEY', status: !!supabase }
+                      ].map(env => (
+                        <div key={env.name} className="flex items-center justify-between p-3 bg-supabase-sidebar/50 border border-supabase-border/50 rounded-lg">
+                          <span className="text-[10px] font-mono text-supabase-muted">{env.name}</span>
+                          {env.status ? (
+                            <Check size={12} className="text-supabase-green" />
+                          ) : (
+                            <X size={12} className="text-red-500" />
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Seed Data Section */}
+              <div className="bg-supabase-panel border border-supabase-border rounded-2xl overflow-hidden flex flex-col">
+                <div className="px-6 py-4 border-b border-supabase-border bg-supabase-sidebar">
+                  <h3 className="text-xs font-black uppercase tracking-widest text-supabase-text flex items-center gap-2">
+                    <Database size={14} className="text-supabase-green" />
+                    Seed Data Management
+                  </h3>
+                </div>
+                <div className="p-6 space-y-6">
+                  <div className="p-4 bg-supabase-green/5 border border-supabase-green/20 rounded-xl space-y-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-supabase-green/20 flex items-center justify-center text-supabase-green">
+                        <Layers size={18} />
+                      </div>
+                      <div>
+                        <p className="text-xs font-black text-supabase-text uppercase tracking-tight">Academic Infrastructure</p>
+                        <p className="text-[10px] text-supabase-muted uppercase tracking-widest">Classes, Subjects, Sections</p>
+                      </div>
+                    </div>
+                    <p className="text-[11px] text-supabase-muted leading-relaxed">
+                      Populate your database with a standard academic structure. This will add sample classes (1-5), core subjects, and default sections.
+                    </p>
+                    <button 
+                      onClick={handleSeedData}
+                      disabled={isSeeding || !supabase}
+                      className="w-full py-3 bg-supabase-green text-black rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-supabase-greenHover transition-all flex items-center justify-center gap-2 shadow-lg shadow-supabase-green/10 disabled:opacity-50"
+                    >
+                      {isSeeding ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
+                      Apply Academic Seed Data
+                    </button>
+                  </div>
+
+                  <div className="p-4 bg-supabase-sidebar border border-supabase-border rounded-xl space-y-3 opacity-60">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-supabase-panel flex items-center justify-center text-supabase-muted">
+                        <UserCheck size={18} />
+                      </div>
+                      <div>
+                        <p className="text-xs font-black text-supabase-text uppercase tracking-tight">Sample Personnel</p>
+                        <p className="text-[10px] text-supabase-muted uppercase tracking-widest">Coming Soon</p>
+                      </div>
+                    </div>
+                    <p className="text-[11px] text-supabase-muted leading-relaxed">
+                      Populate sample teachers, students, and employees to test HR and attendance features.
+                    </p>
+                    <button 
+                      disabled
+                      className="w-full py-3 bg-supabase-panel border border-supabase-border text-supabase-muted rounded-xl text-[10px] font-black uppercase tracking-widest cursor-not-allowed"
+                    >
+                      Locked
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-6 bg-supabase-sidebar border border-supabase-border rounded-2xl flex flex-col md:flex-row items-center justify-between gap-6">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-2xl bg-supabase-panel border border-supabase-border flex items-center justify-center text-supabase-muted">
+                  <Server size={24} />
+                </div>
+                <div>
+                  <h4 className="text-sm font-black text-supabase-text uppercase tracking-tight">System Version</h4>
+                  <p className="text-[10px] text-supabase-muted font-mono uppercase tracking-widest">v2.4.0-stable (Enterprise)</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="text-right hidden sm:block">
+                  <p className="text-[10px] font-black text-supabase-text uppercase tracking-widest">Last Infrastructure Sync</p>
+                  <p className="text-[10px] text-supabase-muted font-mono">{new Date().toLocaleString()}</p>
+                </div>
+                <button 
+                  onClick={persistConfig}
+                  className="px-6 py-2.5 bg-supabase-panel border border-supabase-border text-supabase-text rounded-xl text-[10px] font-black uppercase tracking-widest hover:border-supabase-green transition-all"
+                >
+                  Full System Backup
+                </button>
               </div>
             </div>
           </div>

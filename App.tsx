@@ -35,11 +35,12 @@ import FeeStructureView from './components/FeeStructureView';
 import BillingView from './components/BillingView';
 import LoginView from './components/LoginView';
 import { View } from './types';
-import { BookOpen, CreditCard, Book, Activity } from 'lucide-react';
+import { BookOpen, CreditCard, Book, Activity, WifiOff } from 'lucide-react';
 import { ThemeProvider } from './context/ThemeContext';
 import { ClassProvider } from './context/ClassContext';
 import { ToastProvider } from './context/ToastContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { supabase } from './services/supabaseClient';
 
 const AppContent: React.FC = () => {
   const { isLoading: authLoading, isAuthenticated } = useAuth();
@@ -68,6 +69,30 @@ const AppContent: React.FC = () => {
           <div className="flex items-center gap-2 text-supabase-muted">
             <Loader2 className="animate-spin" size={16} />
             <span className="text-sm font-mono tracking-widest">LOADING SYSTEM...</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!supabase) {
+    return (
+      <div className="min-h-screen bg-supabase-bg flex items-center justify-center p-4">
+        <div className="bg-supabase-panel border border-supabase-border p-8 rounded-lg max-w-md w-full text-center space-y-4">
+          <div className="text-red-500 flex justify-center">
+            <WifiOff size={48} />
+          </div>
+          <h1 className="text-xl font-bold text-supabase-text uppercase tracking-tight">Supabase Not Configured</h1>
+          <p className="text-supabase-muted text-sm">
+            Please add your <code className="bg-supabase-bg px-1 rounded text-supabase-green">VITE_SUPABASE_URL</code> and <code className="bg-supabase-bg px-1 rounded text-supabase-green">VITE_SUPABASE_ANON_KEY</code> to the environment variables in the Settings menu.
+          </p>
+          <div className="pt-4">
+            <button 
+              onClick={() => window.location.reload()}
+              className="w-full bg-supabase-green text-supabase-bg font-bold py-2 rounded uppercase tracking-widest hover:bg-opacity-90 transition-all"
+            >
+              Retry Connection
+            </button>
           </div>
         </div>
       </div>

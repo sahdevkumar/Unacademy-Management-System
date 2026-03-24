@@ -80,7 +80,7 @@ export const scheduleService = {
           .order('name', { ascending: true });
         
         if (error) {
-          console.error("Supabase Error fetching classes:", error.message);
+          console.error("Supabase Error fetching classes:", error.message, error.details, error.hint);
           return [];
         }
         
@@ -133,18 +133,30 @@ export const scheduleService = {
           .select('*')
           .order('name', { ascending: true });
         
-        if (error) throw error;
+        if (error) {
+          console.error("Supabase Error fetching subjects:", error.message, error.details);
+          throw error;
+        }
         return data || [];
-    } catch { return []; }
+    } catch (err) { 
+        console.error("getSubjects failed:", err);
+        return []; 
+    }
   },
 
   async getTeachers(): Promise<Teacher[]> {
     if (!supabase) return [];
     try {
         const { data, error } = await supabase.from('teachers').select('*').order('name', { ascending: true });
-        if (error) throw error;
+        if (error) {
+          console.error("Supabase Error fetching teachers:", error.message, error.details);
+          throw error;
+        }
         return data as Teacher[];
-    } catch { return []; }
+    } catch (err) { 
+        console.error("getTeachers failed:", err);
+        return []; 
+    }
   },
 
   async uploadTeacherPhoto(file: File): Promise<{success: boolean, url?: string, error?: string}> {
@@ -242,12 +254,18 @@ export const scheduleService = {
      if (supabase) {
          try {
              const { data, error } = await supabase.from('weekly_schedules').select('*').eq('status', 'true').order('updated_at', { ascending: false });
-             if (error) throw error;
+             if (error) {
+                 console.error("Supabase Error fetching published schedules:", error.message, error.details);
+                 throw error;
+             }
              return (data || []).map(item => ({
                  ...item,
                  content: Array.isArray(item.content) ? item.content : []
              }));
-         } catch { return []; }
+         } catch (err) { 
+             console.error("getPublished failed:", err);
+             return []; 
+         }
      }
      return [];
   },

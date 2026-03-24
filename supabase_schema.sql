@@ -1,5 +1,24 @@
 -- Supabase Database Schema for Unacademy Management System
 
+-- 0. Clean Slate (Resetting tables to fix type mismatches)
+DROP TABLE IF EXISTS payroll_records CASCADE;
+DROP TABLE IF EXISTS payroll_settings CASCADE;
+DROP TABLE IF EXISTS employees CASCADE;
+DROP TABLE IF EXISTS registrations CASCADE;
+DROP TABLE IF EXISTS student_feedback CASCADE;
+DROP TABLE IF EXISTS students CASCADE;
+DROP TABLE IF EXISTS classes CASCADE;
+DROP TABLE IF EXISTS system_users CASCADE;
+DROP TABLE IF EXISTS weekly_schedules CASCADE;
+DROP TABLE IF EXISTS attendance_logs CASCADE;
+DROP TABLE IF EXISTS outreach_logs CASCADE;
+DROP TABLE IF EXISTS enquiry_leads CASCADE;
+DROP TABLE IF EXISTS biometric_devices CASCADE;
+DROP TABLE IF EXISTS personnel_tasks CASCADE;
+DROP TABLE IF EXISTS subjects CASCADE;
+DROP TABLE IF EXISTS sections CASCADE;
+DROP TABLE IF EXISTS system_config CASCADE;
+
 -- 1. System Configuration & Auth
 CREATE TABLE IF NOT EXISTS system_config (
     key TEXT PRIMARY KEY,
@@ -7,26 +26,47 @@ CREATE TABLE IF NOT EXISTS system_config (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Update system_users to link with Supabase Auth
 CREATE TABLE IF NOT EXISTS system_users (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
     full_name TEXT NOT NULL,
     email TEXT UNIQUE NOT NULL,
-    password TEXT NOT NULL,
     role TEXT NOT NULL DEFAULT 'viewer',
     mobile TEXT,
     status TEXT DEFAULT 'active',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Trigger to create system_user on signup
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS TRIGGER AS $$
+BEGIN
+  INSERT INTO public.system_users (id, full_name, email, role)
+  VALUES (
+    NEW.id,
+    COALESCE(NEW.raw_user_meta_data->>'full_name', NEW.email),
+    NEW.email,
+    CASE 
+      WHEN NEW.email = 'INTERNET.00090@gmail.com' THEN 'superadmin'
+      ELSE COALESCE(NEW.raw_user_meta_data->>'role', 'viewer')
+    END
+  ) ON CONFLICT (id) DO NOTHING;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+CREATE OR REPLACE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+
 -- 2. Academic Structure
 CREATE TABLE IF NOT EXISTS classes (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    name TEXT NOT NULL,
+    name TEXT NOT NULL UNIQUE,
     section TEXT DEFAULT 'A',
     room_no TEXT DEFAULT '0',
     level INTEGER DEFAULT 0, -- 0: junior, 1: senior
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(name, section)
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS subjects (
@@ -282,10 +322,6 @@ DROP POLICY IF EXISTS "Allow all on student_feedback" ON student_feedback;
 CREATE POLICY "Allow all on student_feedback" ON student_feedback FOR ALL USING (true) WITH CHECK (true);
 
 -- Initial Data
-INSERT INTO system_users (full_name, email, password, role) 
-VALUES ('System Admin', 'dev@unacademy.system', '1234', 'superadmin')
-ON CONFLICT (email) DO NOTHING;
-
 INSERT INTO system_config (key, value) VALUES 
 ('system_roles', '["superadmin", "administrator", "editor", "teacher", "viewer"]'),
 ('system_departments', '["Academic", "Administration", "IT Support", "Human Resources"]'),

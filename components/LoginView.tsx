@@ -5,13 +5,16 @@ import { useToast } from '../context/ToastContext';
 import { Loader2, Mail, Lock, ShieldCheck, Eye, EyeOff, AlertCircle, Info } from 'lucide-react';
 
 const LoginView: React.FC = () => {
+  const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [fullName, setFullName] = useState('');
+  const [role, setRole] = useState('viewer');
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
-  const { login } = useAuth();
+  const { login, register, availableRoles } = useAuth();
   const { showToast } = useToast();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -20,10 +23,16 @@ const LoginView: React.FC = () => {
     setError(null);
     
     try {
-      await login(email, password);
-      showToast('Login successful. Welcome to the workspace.', 'success');
+      if (isLogin) {
+        await login(email, password);
+        showToast('Login successful. Welcome to the workspace.', 'success');
+      } else {
+        await register(email, password, fullName, role);
+        showToast('Registration successful. Please check your email for verification.', 'success');
+        setIsLogin(true);
+      }
     } catch (err: any) {
-      const errMsg = err.message || 'Login failed. Please check your credentials.';
+      const errMsg = err.message || 'Authentication failed. Please check your credentials.';
       setError(errMsg);
       showToast(errMsg, 'error');
     } finally {
@@ -39,7 +48,7 @@ const LoginView: React.FC = () => {
             U
           </div>
           <h1 className="text-2xl font-bold text-supabase-text tracking-tight">Unacademy Management</h1>
-          <p className="text-supabase-muted text-sm mt-2">Enter your credentials to access the console</p>
+          <p className="text-supabase-muted text-sm mt-2">{isLogin ? 'Enter your credentials to access the console' : 'Create a new administrative account'}</p>
         </div>
 
         <div className="bg-supabase-panel border border-supabase-border rounded-xl shadow-2xl p-8 relative overflow-hidden">
@@ -52,6 +61,38 @@ const LoginView: React.FC = () => {
                 <AlertCircle size={16} className="shrink-0" />
                 <span>{error}</span>
               </div>
+            )}
+
+            {!isLogin && (
+              <>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-supabase-muted uppercase tracking-[0.15em]">Full Name</label>
+                  <div className="relative group">
+                    <ShieldCheck className="absolute left-3 top-3 text-supabase-muted group-focus-within:text-supabase-green transition-colors" size={18} />
+                    <input 
+                      type="text" 
+                      required
+                      value={fullName}
+                      onChange={(e) => setFullName(e.target.value)}
+                      placeholder="John Doe"
+                      className="w-full bg-supabase-sidebar border border-supabase-border rounded-lg pl-10 pr-4 py-2.5 text-sm text-supabase-text placeholder:text-supabase-muted/50 focus:outline-none focus:border-supabase-green focus:ring-1 focus:ring-supabase-green/30 transition-all shadow-inner"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-supabase-muted uppercase tracking-[0.15em]">Initial Role</label>
+                  <select 
+                    value={role}
+                    onChange={(e) => setRole(e.target.value)}
+                    className="w-full bg-supabase-sidebar border border-supabase-border rounded-lg px-4 py-2.5 text-sm text-supabase-text focus:outline-none focus:border-supabase-green focus:ring-1 focus:ring-supabase-green/30 transition-all shadow-inner"
+                  >
+                    {availableRoles.map(r => (
+                      <option key={r} value={r}>{r.toUpperCase()}</option>
+                    ))}
+                  </select>
+                </div>
+              </>
             )}
 
             <div className="space-y-2">
@@ -72,7 +113,7 @@ const LoginView: React.FC = () => {
             <div className="space-y-2">
               <div className="flex justify-between items-center">
                 <label className="text-[10px] font-bold text-supabase-muted uppercase tracking-[0.15em]">Security Key</label>
-                <button type="button" className="text-[10px] text-supabase-green hover:text-supabase-greenHover transition-colors font-medium">Reset password?</button>
+                {isLogin && <button type="button" className="text-[10px] text-supabase-green hover:text-supabase-greenHover transition-colors font-medium">Reset password?</button>}
               </div>
               <div className="relative group">
                 <Lock className="absolute left-3 top-3 text-supabase-muted group-focus-within:text-supabase-green transition-colors" size={18} />
@@ -102,24 +143,24 @@ const LoginView: React.FC = () => {
               {isSubmitting ? (
                 <>
                   <Loader2 className="animate-spin" size={18} />
-                  <span>Verifying...</span>
+                  <span>{isLogin ? 'Verifying...' : 'Creating Account...'}</span>
                 </>
               ) : (
                 <>
                   <ShieldCheck size={18} className="group-hover:scale-110 transition-transform" />
-                  <span>Sign In</span>
+                  <span>{isLogin ? 'Sign In' : 'Create Account'}</span>
                 </>
               )}
             </button>
           </form>
 
-          {/* Developer Hint */}
-          <div className="mt-6 pt-4 border-t border-supabase-border flex items-start gap-3 opacity-60 hover:opacity-100 transition-opacity">
-             <Info size={14} className="text-supabase-green mt-0.5 shrink-0" />
-             <div className="text-[10px] text-supabase-muted">
-                <span className="font-bold uppercase tracking-wider block mb-0.5">Development Access</span>
-                <span className="font-mono bg-supabase-bg px-1 rounded border border-supabase-border">dev@unacademy.system</span> / <span className="font-mono bg-supabase-bg px-1 rounded border border-supabase-border">1234</span>
-             </div>
+          <div className="mt-6 text-center">
+            <button 
+              onClick={() => setIsLogin(!isLogin)}
+              className="text-xs text-supabase-muted hover:text-supabase-green transition-colors"
+            >
+              {isLogin ? "Don't have an account? Create one" : "Already have an account? Sign in"}
+            </button>
           </div>
         </div>
         

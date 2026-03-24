@@ -51,6 +51,7 @@ interface AuthContextType {
   updateDeptMap: (dept: string, selectedDesignations: string[]) => void;
   saveSystemConfig: (academicData?: { classes: any[], subjects: any[], sections: any[] }, biometricConfig?: any) => Promise<void>;
   saveSystemRoles: () => Promise<void>;
+  register: (email: string, password: string, fullName: string, role: string) => Promise<void>;
   updateUser: (data: { name?: string; email?: string }) => Promise<void>;
 }
 
@@ -105,27 +106,43 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setIsLoading(true);
       try {
         if (supabase) {
-          const { data: matrixData } = await supabase.from('system_config').select('value').eq('key', 'permissions_matrix').maybeSingle();
+          // 1. Get Initial Session
+          const { data: { session } } = await supabase.auth.getSession();
+          
+          if (session?.user) {
+            await fetchAndSetProfile(session.user);
+          }
+
+          // 2. Listen for Auth Changes
+          supabase.auth.onAuthStateChange(async (event, session) => {
+            if (session?.user) {
+              await fetchAndSetProfile(session.user);
+            } else {
+              setUser(null);
+            }
+          });
+
+          // 3. Load System Config
+          const { data: matrixData, error: matrixError } = await supabase.from('system_config').select('value').eq('key', 'permissions_matrix').maybeSingle();
+          if (matrixError) console.error("Error loading permissions_matrix:", matrixError.message);
           if (matrixData?.value) setPermissions(matrixData.value as PermissionMap);
 
-          const { data: rolesData } = await supabase.from('system_config').select('value').eq('key', 'system_roles').maybeSingle();
+          const { data: rolesData, error: rolesError } = await supabase.from('system_config').select('value').eq('key', 'system_roles').maybeSingle();
+          if (rolesError) console.error("Error loading system_roles:", rolesError.message);
           if (rolesData?.value) setAvailableRoles(rolesData.value as UserRole[]);
 
-          const { data: deptsData } = await supabase.from('system_config').select('value').eq('key', 'system_departments').maybeSingle();
+          const { data: deptsData, error: deptsError } = await supabase.from('system_config').select('value').eq('key', 'system_departments').maybeSingle();
+          if (deptsError) console.error("Error loading system_departments:", deptsError.message);
           if (deptsData?.value) setDepartments(deptsData.value as string[]);
 
-          const { data: desigData } = await supabase.from('system_config').select('value').eq('key', 'system_designations').maybeSingle();
+          const { data: desigData, error: desigError } = await supabase.from('system_config').select('value').eq('key', 'system_designations').maybeSingle();
+          if (desigError) console.error("Error loading system_designations:", desigError.message);
           if (desigData?.value) setDesignations(desigData.value as string[]);
 
-          const { data: mapData } = await supabase.from('system_config').select('value').eq('key', 'dept_designation_map').maybeSingle();
+          const { data: mapData, error: mapError } = await supabase.from('system_config').select('value').eq('key', 'dept_designation_map').maybeSingle();
+          if (mapError) console.error("Error loading dept_designation_map:", mapError.message);
           if (mapData?.value) setDepartmentDesignationMap(mapData.value as Record<string, string[]>);
         }
-
-        const savedUser = localStorage.getItem('unacademy_auth_user');
-        if (savedUser) {
-          setUser(JSON.parse(savedUser));
-        }
-        // NOTE: MOCK_USER auto-login removed to enable actual login screen
       } catch (e) {
         console.error("Auth initialization failed:", e);
       } finally {
@@ -134,6 +151,62 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
     initializeAuth();
   }, []);
+
+  const fetchAndSetProfile = async (authUser: any) => {
+    if (!supabase) return;
+    try {
+      const { data: profile, error } = await supabase
+        .from('system_users')
+        .select('*')
+        .eq('id', authUser.id)
+        .maybeSingle();
+
+      if (error) {
+        console.error("Error fetching profile:", error);
+      }
+
+      if (profile) {
+        let userRole = profile.role.toLowerCase();
+        if (profile.email === 'INTERNET.00090@gmail.com' && userRole !== 'superadmin') {
+          userRole = 'superadmin';
+          // Update DB in background
+          supabase.from('system_users').update({ role: 'superadmin' }).eq('id', profile.id).then();
+        }
+        setUser({
+          id: profile.id,
+          email: profile.email,
+          name: profile.full_name,
+          role: userRole
+        });
+      } else {
+        // Auto-create profile if it doesn't exist (e.g. if trigger failed or user existed before table)
+        const newProfile = {
+          id: authUser.id,
+          full_name: authUser.user_metadata?.full_name || authUser.email?.split('@')[0] || 'User',
+          email: authUser.email || '',
+          role: (authUser.email === 'INTERNET.00090@gmail.com' ? 'superadmin' : (authUser.user_metadata?.role || 'viewer')).toLowerCase(),
+          status: 'active'
+        };
+
+        const { error: insertError } = await supabase
+          .from('system_users')
+          .upsert(newProfile, { onConflict: 'id' });
+
+        if (insertError) {
+          console.error("Error auto-creating profile:", insertError.message);
+        }
+
+        setUser({
+          id: newProfile.id,
+          email: newProfile.email,
+          name: newProfile.full_name,
+          role: newProfile.role
+        });
+      }
+    } catch (e) {
+      console.error("fetchAndSetProfile failed:", e);
+    }
+  };
 
   const hasPermission = (permission: PermissionKey): boolean => {
     if (!user) return false;
@@ -212,35 +285,54 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }));
   };
 
-  const login = async (email: string, password: string) => {
+  const register = async (email: string, password: string, fullName: string, role: string) => {
     setIsLoading(true);
     try {
-      // 1. Backdoor for Dev/Demo Environment (Works without Database)
-      if (email === MOCK_USER.email && password === '1234') {
-        setUser(MOCK_USER);
-        localStorage.setItem('unacademy_auth_user', JSON.stringify(MOCK_USER));
-        return;
-      }
-
-      // 2. Database Login
       if (supabase) {
-        const { data: dbUser, error } = await supabase.from('system_users').select('*').eq('email', email).maybeSingle();
-        if (error) throw new Error(error.message);
-        if (!dbUser || dbUser.password !== password) throw new Error("Invalid credentials.");
-        const loggedInUser: User = { id: dbUser.id, email: dbUser.email, name: dbUser.full_name, role: dbUser.role.toLowerCase() };
-        setUser(loggedInUser);
-        localStorage.setItem('unacademy_auth_user', JSON.stringify(loggedInUser));
+        const { data, error } = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: {
+              full_name: fullName,
+              role: role
+            }
+          }
+        });
+        if (error) throw error;
+        if (data.user) {
+          await fetchAndSetProfile(data.user);
+        }
       } else {
-        throw new Error("Database offline. Use dev credentials.");
+        throw new Error("Database offline.");
       }
     } finally {
       setIsLoading(false);
     }
   };
 
-  const logout = () => {
+  const login = async (email: string, password: string) => {
+    setIsLoading(true);
+    try {
+      if (supabase) {
+        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+        if (error) throw error;
+        if (data.user) {
+          await fetchAndSetProfile(data.user);
+        }
+      } else {
+        throw new Error("Database offline.");
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const logout = async () => {
+    if (supabase) {
+      await supabase.auth.signOut();
+    }
     setUser(null);
-    localStorage.removeItem('unacademy_auth_user');
   };
 
   const updateUser = async (data: { name?: string; email?: string }) => {
@@ -265,7 +357,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     <AuthContext.Provider value={{ 
       user, isAuthenticated: !!user, login, logout, isLoading, hasPermission, permissions, availableRoles, departments, designations, departmentDesignationMap,
       updatePermission, addRole, deleteRole, addDepartment, deleteDepartment, addDesignation, deleteDesignation, updateDeptMap, saveSystemConfig, saveSystemRoles,
-      updateUser
+      updateUser, register
     }}>
       {children}
     </AuthContext.Provider>
