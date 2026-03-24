@@ -17,6 +17,9 @@ DROP TABLE IF EXISTS biometric_devices CASCADE;
 DROP TABLE IF EXISTS personnel_tasks CASCADE;
 DROP TABLE IF EXISTS subjects CASCADE;
 DROP TABLE IF EXISTS sections CASCADE;
+DROP TABLE IF EXISTS class_subjects CASCADE;
+DROP TABLE IF EXISTS academic_years CASCADE;
+DROP TABLE IF EXISTS terms CASCADE;
 DROP TABLE IF EXISTS system_config CASCADE;
 
 -- 1. System Configuration & Auth
@@ -158,10 +161,10 @@ CREATE TABLE IF NOT EXISTS enquiry_leads (
 CREATE TABLE IF NOT EXISTS biometric_devices (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name TEXT NOT NULL,
-    device_key TEXT UNIQUE NOT NULL,
-    ip_address TEXT,
-    port INTEGER DEFAULT 80,
-    status TEXT DEFAULT 'offline',
+    cloud_key TEXT UNIQUE NOT NULL,
+    serial_number TEXT,
+    location TEXT,
+    status TEXT DEFAULT 'Offline',
     last_sync TIMESTAMP WITH TIME ZONE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
