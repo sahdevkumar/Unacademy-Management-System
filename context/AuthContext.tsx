@@ -102,6 +102,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [departmentDesignationMap, setDepartmentDesignationMap] = useState<Record<string, string[]>>(DEFAULT_DEPT_MAP);
 
   useEffect(() => {
+    let subscription: any = null;
+
     const initializeAuth = async () => {
       setIsLoading(true);
       try {
@@ -114,13 +116,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }
 
           // 2. Listen for Auth Changes
-          supabase.auth.onAuthStateChange(async (event, session) => {
+          const { data: { subscription: sub } } = supabase.auth.onAuthStateChange(async (event, session) => {
             if (session?.user) {
               await fetchAndSetProfile(session.user);
             } else {
               setUser(null);
             }
           });
+          subscription = sub;
 
           // 3. Load System Config
           const { data: matrixData, error: matrixError } = await supabase.from('system_config').select('value').eq('key', 'permissions_matrix').maybeSingle();
@@ -149,7 +152,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setIsLoading(false);
       }
     };
+
     initializeAuth();
+
+    return () => {
+      if (subscription) {
+        subscription.unsubscribe();
+      }
+    };
   }, []);
 
   const fetchAndSetProfile = async (authUser: any) => {

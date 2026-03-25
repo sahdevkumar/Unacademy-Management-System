@@ -1,5 +1,4 @@
-
-import { createClient } from '@supabase/supabase-js';
+import { supabase } from './supabaseClient';
 import axios from 'axios';
 
 export interface BiometricLog {
@@ -15,17 +14,13 @@ export interface BiometricLog {
 }
 
 export class BiometricServerService {
-  private supabase: any;
+  private supabase: any = supabase;
   private baseUrl: string = '';
   private token: string | null = null;
   private isInitialized: boolean = false;
 
   constructor() {
-    const supabaseUrl = process.env.VITE_SUPABASE_URL;
-    const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY;
-    if (supabaseUrl && supabaseKey) {
-      this.supabase = createClient(supabaseUrl, supabaseKey);
-    }
+    // Shared client is already initialized
   }
 
   async initialize() {

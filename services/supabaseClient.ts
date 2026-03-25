@@ -31,6 +31,11 @@ const supabaseKey =
   (typeof process !== 'undefined' ? process.env.VITE_SUPABASE_ANON_KEY : undefined) ||
   (import.meta as any).env?.VITE_SUPABASE_ANON_KEY;
 
+if (typeof process !== 'undefined' && process.env.NODE_ENV === 'production') {
+  console.log("Supabase URL detected:", supabaseUrl ? "Present" : "Missing");
+  console.log("Supabase Key detected:", supabaseKey ? "Present" : "Missing");
+}
+
 // Only create the client if keys are present
 export const supabase = (supabaseUrl && supabaseKey) 
   ? createClient(supabaseUrl, supabaseKey) 

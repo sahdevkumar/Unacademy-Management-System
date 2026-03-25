@@ -1,15 +1,24 @@
+import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import axios from "axios";
 import path from "path";
 import { fileURLToPath } from "url";
 import { biometricServerService } from "./services/biometricServerService";
+import { supabase } from "./services/supabaseClient";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = 3000;
+
+// Log Supabase connection status on startup
+if (supabase) {
+  console.log("Supabase client initialized successfully.");
+} else {
+  console.warn("Supabase client failed to initialize. Check your environment variables (SUPABASE_URL, SUPABASE_KEY or VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY).");
+}
 
 app.use(cors());
 app.use(express.json());
