@@ -80,22 +80,22 @@ const MainLayout: React.FC<{
       case View.TEACHERS: return <TeachersView />;
       case View.EMPLOYEES: return <EmployeesView />;
       case View.TEACHER_TASKS: return <TeacherTaskView />;
-      case View.TODAY_TASKS: return <TodayTaskView />;
-      case View.MY_TASKS: return <MyTaskView />;
+      case View.TODAY_TASK: return <TodayTaskView />;
+      case View.MY_TASK: return <MyTaskView />;
       case View.LIVE_SCHEDULE: return <LiveScheduleView />;
       case View.ACCESS_CONTROL: return <AccessControlView />;
       case View.SETTINGS: return <SettingsView />;
       case View.MCP_CONSOLE: return <McpConsole />;
       case View.PAYROLL: return <PayrollView />;
-      case View.DEDUCTIONS: return <DeductionManagement />;
-      case View.SALARY_SETUP: return <SalarySetup />;
-      case View.SALARY_REGISTRY: return <BaseSalaryRegistry />;
-      case View.ABSENT_CALLS: return <AbsentCallView />;
-      case View.ABSENT_LOGS: return <AbsentCallLogView />;
+      case View.PAYROLL_DEDUCTIONS: return <DeductionManagement />;
+      case View.PAYROLL_SETUP: return <SalarySetup />;
+      case View.PAYROLL_BASE_SALARY: return <BaseSalaryRegistry />;
+      case View.ABSENT_CALL: return <AbsentCallView />;
+      case View.ABSENT_CALL_LOG: return <AbsentCallLogView />;
       case View.STUDENT_ATTENDANCE: return <StudentAttendanceView />;
       case View.ATTENDANCE_DASHBOARD: return <AttendanceDashboardView />;
-      case View.ENQUIRY_CALLS: return <EnquiryCallView />;
-      case View.ENQUIRY_LOGS: return <EnquiryCallLogView />;
+      case View.ENQUIRE_CALL: return <EnquiryCallView />;
+      case View.ENQUIRE_CALL_LOG: return <EnquiryCallLogView />;
       case View.TASK_MANAGEMENT: return <TaskManagementView />;
       case View.STUDENTS: return <StudentsView />;
       case View.REGISTRATION: return <RegistrationView />;
@@ -113,16 +113,15 @@ const MainLayout: React.FC<{
     <div className="flex h-screen bg-supabase-bg text-supabase-text overflow-hidden font-sans selection:bg-supabase-green/30">
       <Sidebar 
         currentView={currentView} 
-        onViewChange={setCurrentView} 
+        onChangeView={setCurrentView} 
         isOpen={isSidebarOpen}
         onClose={() => setIsSidebarOpen(false)}
       />
       <div className="flex-1 flex flex-col min-w-0 relative">
         <Header 
-          onMenuClick={() => setIsSidebarOpen(true)} 
+          onMenuToggle={() => setIsSidebarOpen(true)} 
           currentView={currentView}
-          user={user}
-          onLogout={logout}
+          onChangeView={setCurrentView}
         />
         <main className="flex-1 overflow-y-auto custom-scrollbar bg-supabase-bg/50">
           <div className="max-w-[1600px] mx-auto">
