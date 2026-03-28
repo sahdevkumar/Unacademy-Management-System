@@ -126,7 +126,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           subscription = sub;
 
           // 3. Load System Config with timeout
-          const fetchWithTimeout = async (query: any, timeoutMs = 10000) => {
+          const fetchWithTimeout = async (query: any, timeoutMs = 20000) => {
             return Promise.race([
               query,
               new Promise((_, reject) => setTimeout(() => reject(new Error('Fetch timed out')), timeoutMs))

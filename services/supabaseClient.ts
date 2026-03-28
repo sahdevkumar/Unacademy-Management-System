@@ -34,6 +34,13 @@ const supabaseKey = (
 )?.trim();
 
 // Detailed logging for production debugging
+if (typeof window !== 'undefined' && (window as any).env) {
+  console.log("Runtime window.env detected:", {
+    VITE_SUPABASE_URL: (window as any).env.VITE_SUPABASE_URL ? "Present" : "Missing",
+    VITE_SUPABASE_ANON_KEY: (window as any).env.VITE_SUPABASE_ANON_KEY ? "Present" : "Missing"
+  });
+}
+
 if (typeof process !== 'undefined' && (process.env.NODE_ENV === 'production' || process.env.DEBUG === 'true')) {
   console.log("Supabase URL detected:", supabaseUrl ? `Present (${supabaseUrl.substring(0, 10)}...)` : "Missing");
   console.log("Supabase Key detected:", supabaseKey ? `Present (${supabaseKey.substring(0, 5)}...)` : "Missing");

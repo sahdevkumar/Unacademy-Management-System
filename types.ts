@@ -1,6 +1,10 @@
 
 import React from 'react';
 
+declare global {
+  const __APP_VERSION__: string;
+}
+
 export enum View {
   DASHBOARD = 'DASHBOARD',
   TABLE_EDITOR = 'TABLE_EDITOR',

@@ -118,12 +118,31 @@ const SettingsView: React.FC = () => {
 
     setDbStatus('Checking');
     
-    // Create a promise that rejects after 10 seconds
+    const supabaseUrl = currentSupabase.supabaseUrl;
+    
+    // Create a promise that rejects after 20 seconds
     const timeoutPromise = new Promise((_, reject) => 
-      setTimeout(() => reject(new Error('Connection timed out after 10 seconds')), 10000)
+      setTimeout(() => reject(new Error(`Connection timed out after 20 seconds trying to reach: ${supabaseUrl}. Please verify this URL is publicly accessible from your browser and not blocked by a firewall.`)), 20000)
     );
 
     try {
+      // First, try a simple fetch to the Supabase REST API root to check basic connectivity
+      const healthCheckUrl = `${supabaseUrl}/rest/v1/`;
+      const healthCheckPromise = fetch(healthCheckUrl, { method: 'GET' }).then(res => {
+        if (!res.ok && res.status !== 404 && res.status !== 401 && res.status !== 400) {
+          throw new Error(`HTTP Error ${res.status} when reaching ${healthCheckUrl}`);
+        }
+        return true;
+      }).catch(e => {
+        // If it's a TypeError, it's likely a CORS or network issue
+        if (e.name === 'TypeError' && e.message === 'Failed to fetch') {
+           throw new Error(`Network error or CORS issue when reaching ${healthCheckUrl}. Is the server running and accessible?`);
+        }
+        throw new Error(`Failed to reach ${healthCheckUrl}: ${e.message}`);
+      });
+
+      await Promise.race([healthCheckPromise, timeoutPromise]);
+
       // Perform a simple query to verify connection with a timeout
       const queryPromise = currentSupabase.from('system_config').select('key').limit(1);
       
@@ -1386,6 +1405,14 @@ const SettingsView: React.FC = () => {
                           )}
                         </div>
                       ))}
+                    </div>
+                  </div>
+
+                  <div className="space-y-4 pt-4 border-t border-supabase-border/50">
+                    <h4 className="text-[10px] font-black uppercase tracking-widest text-supabase-muted">Application Version</h4>
+                    <div className="flex items-center justify-between p-3 bg-supabase-sidebar/50 border border-supabase-border/50 rounded-lg">
+                      <span className="text-[10px] font-mono text-supabase-muted">Current Build</span>
+                      <span className="text-[10px] font-mono text-supabase-green font-bold">v{typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '1.0.0'}</span>
                     </div>
                   </div>
                 </div>

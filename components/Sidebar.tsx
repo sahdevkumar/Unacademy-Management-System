@@ -438,8 +438,13 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, isOpen = f
         </div>
 
         {/* Bottom Nav */}
-        <div className="p-3 border-t border-supabase-border">
+        <div className="p-3 border-t border-supabase-border flex flex-col gap-2">
             {renderNavItem(View.SETTINGS, 'Settings', <Settings size={18} />, 'VIEW_SETTINGS')}
+            
+            <div className="mt-2 px-3 flex items-center justify-between text-[10px] text-supabase-muted font-mono uppercase tracking-widest">
+              <span>Version</span>
+              <span>v{typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '1.0.0'}</span>
+            </div>
         </div>
       </motion.div>
     </>

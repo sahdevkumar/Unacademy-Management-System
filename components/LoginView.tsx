@@ -168,6 +168,11 @@ const LoginView: React.FC = () => {
           Access restricted to authorized personnel. All login attempts are logged.<br/>
           <button className="mt-2 text-supabase-green hover:underline font-medium">Contact Infrastructure Team</button>
         </p>
+        <div className="mt-4 text-center">
+          <span className="text-[10px] font-mono text-supabase-muted/50 uppercase tracking-widest">
+            v{typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '1.0.0'}
+          </span>
+        </div>
       </div>
     </div>
   );

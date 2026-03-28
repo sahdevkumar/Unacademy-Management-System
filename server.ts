@@ -5,6 +5,7 @@ import axios from "axios";
 import path from "path";
 import { fileURLToPath } from "url";
 import https from "https";
+import fs from "fs";
 import { biometricServerService } from "./services/biometricServerService";
 import { supabase } from "./services/supabaseClient";
 
@@ -89,11 +90,16 @@ app.post("/api/biometric-proxy", async (req, res) => {
     // Reduce noise for 404s and 405s as they are often part of endpoint discovery
     if (status === 404 || status === 405) {
       console.log(`Proxy ${status}: ${url}`);
+      res.status(status).json(data);
+    } else if (status === 400 && JSON.stringify(data).includes('already in progress')) {
+      // Suppress the "Command already in progress" error as it's expected when fetching logs frequently
+      // Return 200 OK so the client doesn't throw an exception
+      console.log(`Proxy warning (${status}) for ${url}: Command already in progress`);
+      res.status(200).json({ success: true, message: "Command already in progress" });
     } else {
       console.error(`Proxy error (${status}) for ${url}:`, JSON.stringify(data));
+      res.status(status).json(data);
     }
-    
-    res.status(status).json(data);
   }
 });
 
@@ -143,7 +149,36 @@ async function setupVite(app: any) {
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
     app.get('*all', (req, res) => {
-      res.sendFile(path.join(distPath, 'index.html'));
+      const indexPath = path.join(distPath, 'index.html');
+      
+      if (fs.existsSync(indexPath)) {
+        let content = fs.readFileSync(indexPath, 'utf8');
+        
+        // Inject runtime environment variables
+        const runtimeEnv = {
+          VITE_SUPABASE_URL: process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL,
+          VITE_SUPABASE_ANON_KEY: process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_KEY || process.env.SUPABASE_ANON_KEY,
+          GEMINI_API_KEY: process.env.GEMINI_API_KEY || process.env.API_KEY
+        };
+        
+        console.log("Injecting runtime env:", {
+          VITE_SUPABASE_URL: runtimeEnv.VITE_SUPABASE_URL ? "Present" : "Missing",
+          VITE_SUPABASE_ANON_KEY: runtimeEnv.VITE_SUPABASE_ANON_KEY ? "Present" : "Missing",
+          GEMINI_API_KEY: runtimeEnv.GEMINI_API_KEY ? "Present" : "Missing"
+        });
+        
+        const injection = `
+          window.env = ${JSON.stringify(runtimeEnv)};
+          if (window.process && window.process.env) {
+            Object.assign(window.process.env, ${JSON.stringify(runtimeEnv)});
+          }
+        `;
+        
+        content = content.replace('/* RUNTIME_ENV_INJECTION */', injection);
+        res.send(content);
+      } else {
+        res.status(404).send('Not Found');
+      }
     });
   }
 }

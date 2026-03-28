@@ -65,7 +65,12 @@ class BiometricService {
     });
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      const errorMessage = typeof errorData === 'string' ? errorData : (errorData.error || `Request failed with status ${response.status}`);
+      let errorMessage = `Request failed with status ${response.status}`;
+      if (typeof errorData === 'string') {
+        errorMessage = errorData;
+      } else if (errorData && typeof errorData === 'object') {
+        errorMessage = errorData.error || JSON.stringify(errorData);
+      }
       throw new Error(errorMessage);
     }
     return response;

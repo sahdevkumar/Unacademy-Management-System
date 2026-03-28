@@ -84,8 +84,15 @@ const AppContent: React.FC = () => {
           </div>
           <h1 className="text-xl font-bold text-supabase-text uppercase tracking-tight">Supabase Not Configured</h1>
           <p className="text-supabase-muted text-sm">
-            Please add your <code className="bg-supabase-bg px-1 rounded text-supabase-green">VITE_SUPABASE_URL</code> and <code className="bg-supabase-bg px-1 rounded text-supabase-green">VITE_SUPABASE_ANON_KEY</code> to the environment variables in the Settings menu.
+            Please add your <code className="bg-supabase-bg px-1 rounded text-supabase-green">VITE_SUPABASE_URL</code> and <code className="bg-supabase-bg px-1 rounded text-supabase-green">VITE_SUPABASE_ANON_KEY</code> to your environment variables.
           </p>
+          <div className="bg-supabase-sidebar p-3 rounded text-[10px] text-left font-mono text-supabase-muted space-y-2">
+            <p className="text-supabase-green font-bold uppercase">Deployment Tip (Coolify):</p>
+            <p>1. Go to your Coolify Dashboard.</p>
+            <p>2. Add the variables in the "Environment Variables" tab.</p>
+            <p>3. Click "Save" and then **Restart** your container.</p>
+            <p className="opacity-50 italic">Note: If you just added them, a restart is required to inject them into the running app.</p>
+          </div>
           <div className="pt-4">
             <button 
               onClick={() => window.location.reload()}

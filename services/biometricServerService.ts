@@ -121,7 +121,8 @@ export class BiometricServerService {
           try {
             await apiClient.post(`${this.baseUrl}/api/DeviceCommand?commandType=FetchAllLogs`, [deviceKey], { headers: this.getHeaders() });
           } catch (e: any) {
-            if (!e.response?.data?.includes?.('already in progress')) {
+            const errorData = JSON.stringify(e.response?.data || {});
+            if (!errorData.includes('already in progress')) {
               console.warn(`FetchAllLogs command failed for ${deviceKey}:`, e.message);
             }
           }
