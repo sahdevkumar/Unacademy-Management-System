@@ -1,90 +1,24 @@
 import { createClient } from '@supabase/supabase-js';
 
-// Helper to safely get environment variables across Vite, Next.js, and standard process.env
-const getEnv = (key: string, viteKey?: string) => {
-  const meta = import.meta as any;
-  
-  if (typeof meta !== 'undefined' && meta.env) {
-    if (viteKey && meta.env[viteKey]) return meta.env[viteKey];
-    if (meta.env[key]) return meta.env[key];
-  }
-
-  if (typeof process !== 'undefined' && process.env) {
-    if (viteKey && process.env[viteKey]) return process.env[viteKey];
-    if (process.env[key]) return process.env[key];
-  }
-
-  return undefined;
-};
-
-// Access environment variables with fallbacks and trim them
-const isValidString = (val: any): val is string => 
-  typeof val === 'string' && val.trim() !== '' && val !== 'undefined' && val !== 'null';
-
-const supabaseUrl = (
-  (typeof window !== 'undefined' && isValidString((window as any).env?.VITE_SUPABASE_URL) ? (window as any).env.VITE_SUPABASE_URL : undefined) ||
-  getEnv('VITE_SUPABASE_URL') || 
-  getEnv('SUPABASE_URL') || 
-  getEnv('NEXT_PUBLIC_SUPABASE_URL')
-)?.trim();
-
-const supabaseKey = (
-  (typeof window !== 'undefined' && isValidString((window as any).env?.VITE_SUPABASE_ANON_KEY) ? (window as any).env.VITE_SUPABASE_ANON_KEY : undefined) ||
-  getEnv('VITE_SUPABASE_ANON_KEY') || 
-  getEnv('SUPABASE_KEY') || 
-  getEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY') || 
-  getEnv('VITE_SUPABASE_KEY')
-)?.trim();
-
-// Detailed logging for production debugging
-if (typeof window !== 'undefined' && (window as any).env) {
-  console.log("Runtime window.env detected:", {
-    VITE_SUPABASE_URL: (window as any).env.VITE_SUPABASE_URL ? "Present" : "Missing",
-    VITE_SUPABASE_ANON_KEY: (window as any).env.VITE_SUPABASE_ANON_KEY ? "Present" : "Missing"
-  });
-}
-
-if (typeof process !== 'undefined' && (process.env.NODE_ENV === 'production' || process.env.DEBUG === 'true')) {
-  console.log("Supabase URL detected:", supabaseUrl ? `Present (${supabaseUrl.substring(0, 10)}...)` : "Missing");
-  console.log("Supabase Key detected:", supabaseKey ? `Present (${supabaseKey.substring(0, 5)}...)` : "Missing");
-}
-
-// Singleton instance to prevent Web Locks API contention
-let supabaseInstance: any = null;
-let currentUrl: string | null = null;
-let currentKey: string | null = null;
-
-// Only create the client if keys are present
+// Singleton instance
 export let supabase: any = null;
 
 // Function to manually re-initialize the client if needed
 export const reinitializeSupabase = (url?: string, key?: string) => {
-  // Try to get values from arguments, then window.env (runtime), then build-time variables
-  const envUrl = typeof window !== 'undefined' && isValidString((window as any).env?.VITE_SUPABASE_URL) 
-    ? (window as any).env.VITE_SUPABASE_URL 
-    : undefined;
-    
-  const envKey = typeof window !== 'undefined' && isValidString((window as any).env?.VITE_SUPABASE_ANON_KEY) 
-    ? (window as any).env.VITE_SUPABASE_ANON_KEY 
-    : undefined;
+  // Check runtime injected env vars first (for deployed environments)
+  const windowEnvUrl = typeof window !== 'undefined' && (window as any).env ? (window as any).env.VITE_SUPABASE_URL : undefined;
+  const windowEnvKey = typeof window !== 'undefined' && (window as any).env ? (window as any).env.VITE_SUPABASE_ANON_KEY : undefined;
 
-  const finalUrl = url?.trim() || envUrl || supabaseUrl;
-  const finalKey = key?.trim() || envKey || supabaseKey;
+  // Use Vite's statically replaced process.env (defined in vite.config.ts)
+  // or import.meta.env as a fallback
+  const buildEnvUrl = process.env.VITE_SUPABASE_URL || (import.meta as any).env?.VITE_SUPABASE_URL;
+  const buildEnvKey = process.env.VITE_SUPABASE_ANON_KEY || (import.meta as any).env?.VITE_SUPABASE_ANON_KEY;
+
+  const finalUrl = url?.trim() || windowEnvUrl?.trim() || buildEnvUrl?.trim();
+  const finalKey = key?.trim() || windowEnvKey?.trim() || buildEnvKey?.trim();
   
-  if (isValidString(finalUrl) && isValidString(finalKey)) {
-    // Return existing instance if URL and Key haven't changed
-    if (supabaseInstance && currentUrl === finalUrl && currentKey === finalKey) {
-      return supabaseInstance;
-    }
-
-    console.log("Initializing Supabase client with:", {
-      url: finalUrl.substring(0, 15) + "...",
-      key: "Present (Masked)"
-    });
-
-    currentUrl = finalUrl;
-    currentKey = finalKey;
-    supabaseInstance = createClient(finalUrl, finalKey, {
+  if (finalUrl && finalKey) {
+    supabase = createClient(finalUrl, finalKey, {
       auth: {
         persistSession: true,
         autoRefreshToken: true,
@@ -93,20 +27,12 @@ export const reinitializeSupabase = (url?: string, key?: string) => {
         schema: 'public'
       }
     });
-    
-    supabase = supabaseInstance;
-    return supabaseInstance;
+    return supabase;
   }
   
   console.warn("Cannot initialize Supabase: URL or Key is missing.");
   return null;
 };
 
-// Initialize immediately if keys are present
-if (supabaseUrl && supabaseKey) {
-  reinitializeSupabase(supabaseUrl, supabaseKey);
-}
-
-if (!supabase) {
-  console.warn("Supabase credentials not found. Falling back to local storage.");
-}
+// Initialize immediately
+supabase = reinitializeSupabase();

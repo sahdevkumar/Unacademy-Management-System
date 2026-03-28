@@ -49,7 +49,7 @@ interface AuthContextType {
   addDesignation: (name: string) => void;
   deleteDesignation: (name: string) => void;
   updateDeptMap: (dept: string, selectedDesignations: string[]) => void;
-  saveSystemConfig: (academicData?: { classes: any[], subjects: any[], sections: any[] }, biometricConfig?: any) => Promise<void>;
+  saveSystemConfig: (academicData?: { classes: any[], subjects: any[], sections: any[] }) => Promise<void>;
   saveSystemRoles: () => Promise<void>;
   register: (email: string, password: string, fullName: string, role: string) => Promise<void>;
   updateUser: (data: { name?: string; email?: string }) => Promise<void>;
@@ -271,7 +271,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const saveSystemConfig = async (academicData?: { classes: any[], subjects: any[], sections: any[] }, biometricConfig?: any) => {
+  const saveSystemConfig = async (academicData?: { classes: any[], subjects: any[], sections: any[] }) => {
     if (supabase) {
       await supabase.from('system_config').upsert({ key: 'system_roles', value: availableRoles }, { onConflict: 'key' });
       await supabase.from('system_config').upsert({ key: 'system_departments', value: departments }, { onConflict: 'key' });
@@ -280,10 +280,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       if (academicData) {
         await supabase.from('system_config').upsert({ key: 'academic_structure_snapshot', value: academicData }, { onConflict: 'key' });
-      }
-      
-      if (biometricConfig) {
-        await supabase.from('system_config').upsert({ key: 'biometric_api_config', value: biometricConfig }, { onConflict: 'key' });
       }
     }
   };

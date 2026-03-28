@@ -13,7 +13,6 @@ DROP TABLE IF EXISTS weekly_schedules CASCADE;
 DROP TABLE IF EXISTS attendance_logs CASCADE;
 DROP TABLE IF EXISTS outreach_logs CASCADE;
 DROP TABLE IF EXISTS enquiry_leads CASCADE;
-DROP TABLE IF EXISTS biometric_devices CASCADE;
 DROP TABLE IF EXISTS personnel_tasks CASCADE;
 DROP TABLE IF EXISTS subjects CASCADE;
 DROP TABLE IF EXISTS sections CASCADE;
@@ -157,18 +156,6 @@ CREATE TABLE IF NOT EXISTS enquiry_leads (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
--- 4. Biometric System
-CREATE TABLE IF NOT EXISTS biometric_devices (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    name TEXT NOT NULL,
-    cloud_key TEXT UNIQUE NOT NULL,
-    serial_number TEXT,
-    location TEXT,
-    status TEXT DEFAULT 'Offline',
-    last_sync TIMESTAMP WITH TIME ZONE,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-);
-
 -- 5. Human Resources & Payroll
 CREATE TABLE IF NOT EXISTS employees (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -257,7 +244,6 @@ ALTER TABLE weekly_schedules ENABLE ROW LEVEL SECURITY;
 ALTER TABLE attendance_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE outreach_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE enquiry_leads ENABLE ROW LEVEL SECURITY;
-ALTER TABLE biometric_devices ENABLE ROW LEVEL SECURITY;
 ALTER TABLE employees ENABLE ROW LEVEL SECURITY;
 ALTER TABLE personnel_tasks ENABLE ROW LEVEL SECURITY;
 ALTER TABLE payroll_records ENABLE ROW LEVEL SECURITY;
@@ -299,9 +285,6 @@ CREATE POLICY "Allow all on outreach_logs" ON outreach_logs FOR ALL USING (true)
 
 DROP POLICY IF EXISTS "Allow all on enquiry_leads" ON enquiry_leads;
 CREATE POLICY "Allow all on enquiry_leads" ON enquiry_leads FOR ALL USING (true) WITH CHECK (true);
-
-DROP POLICY IF EXISTS "Allow all on biometric_devices" ON biometric_devices;
-CREATE POLICY "Allow all on biometric_devices" ON biometric_devices FOR ALL USING (true) WITH CHECK (true);
 
 DROP POLICY IF EXISTS "Allow all on employees" ON employees;
 CREATE POLICY "Allow all on employees" ON employees FOR ALL USING (true) WITH CHECK (true);
