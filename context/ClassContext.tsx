@@ -64,7 +64,7 @@ export const ClassProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         .subscribe();
       return () => { supabase.removeChannel(channel); };
     }
-  }, []);
+  }, [supabase]);
 
   useEffect(() => {
     if (selectedClassId) {

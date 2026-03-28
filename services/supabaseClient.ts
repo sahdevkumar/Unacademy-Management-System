@@ -1,41 +1,39 @@
 import { createClient } from '@supabase/supabase-js';
 
 // Helper to safely get environment variables across Vite, Next.js, and standard process.env
-const getEnv = (key: string) => {
-  // 1. Check window.env (Injected at runtime by server.ts)
-  if (typeof window !== 'undefined' && (window as any).env?.[key]) {
-    return (window as any).env[key];
-  }
-
-  // 2. Check import.meta.env (Vite build-time)
+const getEnv = (key: string, viteKey?: string) => {
   const meta = import.meta as any;
-  if (typeof meta !== 'undefined' && meta.env && meta.env[key]) {
-    return meta.env[key];
+  
+  if (typeof meta !== 'undefined' && meta.env) {
+    if (viteKey && meta.env[viteKey]) return meta.env[viteKey];
+    if (meta.env[key]) return meta.env[key];
   }
 
-  // 3. Check process.env (Node.js / SSR)
-  if (typeof process !== 'undefined' && process.env && process.env[key]) {
-    return process.env[key];
+  if (typeof process !== 'undefined' && process.env) {
+    if (viteKey && process.env[viteKey]) return process.env[viteKey];
+    if (process.env[key]) return process.env[key];
   }
 
   return undefined;
 };
 
 // Access environment variables with fallbacks and trim them
+const isValidString = (val: any): val is string => 
+  typeof val === 'string' && val.trim() !== '' && val !== 'undefined' && val !== 'null';
+
 const supabaseUrl = (
-  localStorage.getItem('manual_supabase_url') ||
+  (typeof window !== 'undefined' && isValidString((window as any).env?.VITE_SUPABASE_URL) ? (window as any).env.VITE_SUPABASE_URL : undefined) ||
   getEnv('VITE_SUPABASE_URL') || 
   getEnv('SUPABASE_URL') || 
   getEnv('NEXT_PUBLIC_SUPABASE_URL')
 )?.trim();
 
 const supabaseKey = (
-  localStorage.getItem('manual_supabase_key') ||
+  (typeof window !== 'undefined' && isValidString((window as any).env?.VITE_SUPABASE_ANON_KEY) ? (window as any).env.VITE_SUPABASE_ANON_KEY : undefined) ||
   getEnv('VITE_SUPABASE_ANON_KEY') || 
   getEnv('SUPABASE_KEY') || 
   getEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY') || 
-  getEnv('VITE_SUPABASE_KEY') ||
-  getEnv('SUPABASE_ANON_KEY')
+  getEnv('VITE_SUPABASE_KEY')
 )?.trim();
 
 // Detailed logging for production debugging
@@ -61,14 +59,28 @@ export let supabase: any = null;
 
 // Function to manually re-initialize the client if needed
 export const reinitializeSupabase = (url?: string, key?: string) => {
-  const finalUrl = url?.trim() || supabaseUrl;
-  const finalKey = key?.trim() || supabaseKey;
+  // Try to get values from arguments, then window.env (runtime), then build-time variables
+  const envUrl = typeof window !== 'undefined' && isValidString((window as any).env?.VITE_SUPABASE_URL) 
+    ? (window as any).env.VITE_SUPABASE_URL 
+    : undefined;
+    
+  const envKey = typeof window !== 'undefined' && isValidString((window as any).env?.VITE_SUPABASE_ANON_KEY) 
+    ? (window as any).env.VITE_SUPABASE_ANON_KEY 
+    : undefined;
+
+  const finalUrl = url?.trim() || envUrl || supabaseUrl;
+  const finalKey = key?.trim() || envKey || supabaseKey;
   
-  if (finalUrl && finalKey) {
+  if (isValidString(finalUrl) && isValidString(finalKey)) {
     // Return existing instance if URL and Key haven't changed
     if (supabaseInstance && currentUrl === finalUrl && currentKey === finalKey) {
       return supabaseInstance;
     }
+
+    console.log("Initializing Supabase client with:", {
+      url: finalUrl.substring(0, 15) + "...",
+      key: "Present (Masked)"
+    });
 
     currentUrl = finalUrl;
     currentKey = finalKey;
@@ -85,6 +97,8 @@ export const reinitializeSupabase = (url?: string, key?: string) => {
     supabase = supabaseInstance;
     return supabaseInstance;
   }
+  
+  console.warn("Cannot initialize Supabase: URL or Key is missing.");
   return null;
 };
 

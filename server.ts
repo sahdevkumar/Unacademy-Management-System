@@ -34,6 +34,34 @@ app.use(express.json());
 // Trust proxy to get the correct client IP when behind Cloudflare/Coolify
 app.set('trust proxy', true);
 
+// Debug endpoint to check environment variable availability (keys only for security)
+app.get("/api/debug-env", (req, res) => {
+  const envKeys = Object.keys(process.env);
+  const supabaseKeys = envKeys.filter(key => 
+    key.includes('SUPABASE') || 
+    key.includes('GEMINI') || 
+    key.includes('API_KEY')
+  );
+  
+  const values_check: Record<string, string> = {};
+  ['VITE_SUPABASE_URL', 'SUPABASE_URL', 'VITE_SUPABASE_ANON_KEY', 'SUPABASE_KEY', 'SUPABASE_ANON_KEY'].forEach(key => {
+    const val = process.env[key];
+    if (!val) values_check[key] = 'MISSING';
+    else if (val === 'undefined') values_check[key] = 'STRING_UNDEFINED';
+    else if (val === 'null') values_check[key] = 'STRING_NULL';
+    else if (val.trim() === '') values_check[key] = 'EMPTY_STRING';
+    else values_check[key] = `PRESENT (${val.length} chars)`;
+  });
+
+  res.json({
+    node_env: process.env.NODE_ENV,
+    detected_keys: supabaseKeys,
+    values_check,
+    timestamp: new Date().toISOString(),
+    tip: "If your keys are missing, ensure they are in the 'Environment Variables' tab in Coolify (not 'Build Variables') and that you have RESTARTED the container."
+  });
+});
+
 // Biometric API Proxy
 app.post("/api/biometric-proxy", async (req, res) => {
   const { url, method, headers, body } = req.body;
@@ -134,7 +162,9 @@ if (process.env.NODE_ENV !== "production" || process.env.ENABLE_BACKGROUND_SYNC 
 
 // Vite middleware for development
 async function setupVite(app: any) {
-  if (process.env.NODE_ENV !== "production" && !process.env.VERCEL) {
+  const isProduction = process.env.NODE_ENV === "production" || process.env.VERCEL === "1";
+  
+  if (!isProduction) {
     try {
       const { createServer: createViteServer } = await import('vite');
       const vite = await createViteServer({
@@ -142,45 +172,82 @@ async function setupVite(app: any) {
         appType: "spa",
       });
       app.use(vite.middlewares);
+      console.log("Vite dev middleware initialized.");
+      return;
     } catch (e) {
-      console.warn("Vite not found, skipping middleware setup.");
+      console.warn("Vite not found or failed to load, falling back to static serving.");
     }
-  } else {
-    const distPath = path.join(process.cwd(), 'dist');
-    app.use(express.static(distPath));
-    app.get('*all', (req, res) => {
-      const indexPath = path.join(distPath, 'index.html');
-      
-      if (fs.existsSync(indexPath)) {
+  }
+
+  // Production static serving with environment injection
+  const distPath = path.join(process.cwd(), 'dist');
+  console.log(`Serving production build from: ${distPath}`);
+  
+  // Disable default index serving so we can intercept it and inject environment variables
+  app.use(express.static(distPath, { index: false }));
+  
+  app.get('*all', (req, res) => {
+    const indexPath = path.join(distPath, 'index.html');
+    
+    // Set headers to prevent caching of index.html to ensure environment variables are always fresh
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
+
+    if (fs.existsSync(indexPath)) {
+      try {
         let content = fs.readFileSync(indexPath, 'utf8');
         
         // Inject runtime environment variables
+        const getEnvVar = (key: string, fallback?: string) => {
+          const val = process.env[key];
+          if (val && val !== 'undefined' && val !== 'null' && val.trim() !== '') return val;
+          if (fallback) {
+            const fallbackVal = process.env[fallback];
+            if (fallbackVal && fallbackVal !== 'undefined' && fallbackVal !== 'null' && fallbackVal.trim() !== '') return fallbackVal;
+          }
+          return undefined;
+        };
+
         const runtimeEnv = {
-          VITE_SUPABASE_URL: process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL,
-          VITE_SUPABASE_ANON_KEY: process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_KEY || process.env.SUPABASE_ANON_KEY,
-          GEMINI_API_KEY: process.env.GEMINI_API_KEY || process.env.API_KEY
+          VITE_SUPABASE_URL: getEnvVar('VITE_SUPABASE_URL', 'SUPABASE_URL'),
+          VITE_SUPABASE_ANON_KEY: getEnvVar('VITE_SUPABASE_ANON_KEY', 'SUPABASE_KEY') || process.env.SUPABASE_ANON_KEY,
+          GEMINI_API_KEY: getEnvVar('GEMINI_API_KEY', 'API_KEY')
         };
         
-        console.log("--- RUNTIME ENV INJECTION ---");
-        console.log("VITE_SUPABASE_URL:", runtimeEnv.VITE_SUPABASE_URL ? `Found (${runtimeEnv.VITE_SUPABASE_URL.substring(0, 15)}...)` : "MISSING");
-        console.log("VITE_SUPABASE_ANON_KEY:", runtimeEnv.VITE_SUPABASE_ANON_KEY ? "Found (HIDDEN)" : "MISSING");
-        console.log("GEMINI_API_KEY:", runtimeEnv.GEMINI_API_KEY ? "Found (HIDDEN)" : "MISSING");
-        console.log("-----------------------------");
+        console.log(`[${new Date().toISOString()}] Injecting runtime env for request: ${req.url}`);
+        console.log(`Detected URL: ${runtimeEnv.VITE_SUPABASE_URL ? 'YES' : 'NO'}`);
+        console.log(`Detected KEY: ${runtimeEnv.VITE_SUPABASE_ANON_KEY ? 'YES' : 'NO'}`);
         
-        const injection = `
-          window.env = ${JSON.stringify(runtimeEnv)};
-          if (window.process && window.process.env) {
-            Object.assign(window.process.env, ${JSON.stringify(runtimeEnv)});
-          }
-        `;
-        
-        content = content.replace('/* RUNTIME_ENV_INJECTION */', injection);
-        res.send(content);
-      } else {
-        res.status(404).send('Not Found');
-      }
-    });
+        const injectionScript = `
+<script id="runtime-env">
+  window.env = ${JSON.stringify(runtimeEnv)};
+  if (window.process && window.process.env) {
+    Object.assign(window.process.env, ${JSON.stringify(runtimeEnv)});
   }
+  console.log("Runtime environment injected successfully.");
+</script>`;
+        
+        // Try multiple injection points to be safe
+        if (content.includes('</head>')) {
+          content = content.replace('</head>', `${injectionScript}\n</head>`);
+        } else if (content.includes('/* RUNTIME_ENV_INJECTION */')) {
+          content = content.replace('/* RUNTIME_ENV_INJECTION */', injectionScript);
+        } else {
+          // Fallback: just append to the end of the file if no head tag found
+          content = content + injectionScript;
+        }
+        
+        res.status(200).set('Content-Type', 'text/html').send(content);
+      } catch (err) {
+        console.error("Error reading or processing index.html:", err);
+        res.status(500).send("Internal Server Error");
+      }
+    } else {
+      console.warn(`index.html not found at ${indexPath}. Ensure you have run 'npm run build'.`);
+      res.status(404).send('Frontend build not found. Please run build first.');
+    }
+  });
 }
 
 async function startServer() {
@@ -189,6 +256,7 @@ async function startServer() {
   if (!process.env.VERCEL) {
     app.listen(PORT, "0.0.0.0", () => {
       console.log(`Server running on http://localhost:${PORT}`);
+      console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
     });
   }
 }

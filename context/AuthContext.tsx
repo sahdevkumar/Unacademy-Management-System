@@ -107,9 +107,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const initializeAuth = async () => {
       setIsLoading(true);
       try {
-        if (supabase) {
+        if (supabase && supabase.auth) {
           // 1. Get Initial Session
-          const { data: { session } } = await supabase.auth.getSession();
+          const { data } = await supabase.auth.getSession();
+          const session = data?.session;
           
           if (session?.user) {
             await fetchAndSetProfile(session.user);
@@ -197,7 +198,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         subscription.unsubscribe();
       }
     };
-  }, []);
+  }, [supabase]);
 
   const fetchAndSetProfile = async (authUser: any) => {
     if (!supabase) return;
