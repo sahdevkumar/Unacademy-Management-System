@@ -161,11 +161,11 @@ async function setupVite(app: any) {
           GEMINI_API_KEY: process.env.GEMINI_API_KEY || process.env.API_KEY
         };
         
-        console.log("Injecting runtime env:", {
-          VITE_SUPABASE_URL: runtimeEnv.VITE_SUPABASE_URL ? "Present" : "Missing",
-          VITE_SUPABASE_ANON_KEY: runtimeEnv.VITE_SUPABASE_ANON_KEY ? "Present" : "Missing",
-          GEMINI_API_KEY: runtimeEnv.GEMINI_API_KEY ? "Present" : "Missing"
-        });
+        console.log("--- RUNTIME ENV INJECTION ---");
+        console.log("VITE_SUPABASE_URL:", runtimeEnv.VITE_SUPABASE_URL ? `Found (${runtimeEnv.VITE_SUPABASE_URL.substring(0, 15)}...)` : "MISSING");
+        console.log("VITE_SUPABASE_ANON_KEY:", runtimeEnv.VITE_SUPABASE_ANON_KEY ? "Found (HIDDEN)" : "MISSING");
+        console.log("GEMINI_API_KEY:", runtimeEnv.GEMINI_API_KEY ? "Found (HIDDEN)" : "MISSING");
+        console.log("-----------------------------");
         
         const injection = `
           window.env = ${JSON.stringify(runtimeEnv)};

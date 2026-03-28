@@ -1409,6 +1409,61 @@ const SettingsView: React.FC = () => {
                   </div>
 
                   <div className="space-y-4 pt-4 border-t border-supabase-border/50">
+                    <h4 className="text-[10px] font-black uppercase tracking-widest text-supabase-muted">Manual Configuration Overrides</h4>
+                    <div className="space-y-3">
+                      <div className="space-y-1">
+                        <label className="text-[9px] font-black text-supabase-muted uppercase tracking-widest">Supabase URL</label>
+                        <input 
+                          type="text" 
+                          defaultValue={localStorage.getItem('manual_supabase_url') || ''} 
+                          onBlur={(e) => {
+                            if (e.target.value) {
+                              localStorage.setItem('manual_supabase_url', e.target.value);
+                              showToast("Manual URL staged. Reload to apply.", "info");
+                            }
+                          }}
+                          placeholder="https://xyz.supabase.co" 
+                          className="w-full bg-supabase-sidebar border border-supabase-border rounded-lg px-3 py-2 text-xs text-supabase-text outline-none focus:border-supabase-green font-mono" 
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[9px] font-black text-supabase-muted uppercase tracking-widest">Supabase Anon Key</label>
+                        <input 
+                          type="password" 
+                          defaultValue={localStorage.getItem('manual_supabase_key') || ''} 
+                          onBlur={(e) => {
+                            if (e.target.value) {
+                              localStorage.setItem('manual_supabase_key', e.target.value);
+                              showToast("Manual Key staged. Reload to apply.", "info");
+                            }
+                          }}
+                          placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." 
+                          className="w-full bg-supabase-sidebar border border-supabase-border rounded-lg px-3 py-2 text-xs text-supabase-text outline-none focus:border-supabase-green font-mono" 
+                        />
+                      </div>
+                      <div className="flex gap-2 pt-2">
+                        <button 
+                          onClick={() => window.location.reload()}
+                          className="flex-1 py-2 bg-supabase-green text-black rounded-lg text-[9px] font-black uppercase tracking-widest hover:bg-supabase-greenHover transition-all"
+                        >
+                          Apply & Reload
+                        </button>
+                        <button 
+                          onClick={() => {
+                            localStorage.removeItem('manual_supabase_url');
+                            localStorage.removeItem('manual_supabase_key');
+                            showToast("Manual overrides cleared", "success");
+                            setTimeout(() => window.location.reload(), 1000);
+                          }}
+                          className="flex-1 py-2 bg-red-500/10 text-red-500 border border-red-500/20 rounded-lg text-[9px] font-black uppercase tracking-widest hover:bg-red-500/20 transition-all"
+                        >
+                          Clear Overrides
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-4 pt-4 border-t border-supabase-border/50">
                     <h4 className="text-[10px] font-black uppercase tracking-widest text-supabase-muted">Application Version</h4>
                     <div className="flex items-center justify-between p-3 bg-supabase-sidebar/50 border border-supabase-border/50 rounded-lg">
                       <span className="text-[10px] font-mono text-supabase-muted">Current Build</span>

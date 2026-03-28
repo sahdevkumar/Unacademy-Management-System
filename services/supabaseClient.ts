@@ -1,17 +1,21 @@
 import { createClient } from '@supabase/supabase-js';
 
 // Helper to safely get environment variables across Vite, Next.js, and standard process.env
-const getEnv = (key: string, viteKey?: string) => {
-  const meta = import.meta as any;
-  
-  if (typeof meta !== 'undefined' && meta.env) {
-    if (viteKey && meta.env[viteKey]) return meta.env[viteKey];
-    if (meta.env[key]) return meta.env[key];
+const getEnv = (key: string) => {
+  // 1. Check window.env (Injected at runtime by server.ts)
+  if (typeof window !== 'undefined' && (window as any).env?.[key]) {
+    return (window as any).env[key];
   }
 
-  if (typeof process !== 'undefined' && process.env) {
-    if (viteKey && process.env[viteKey]) return process.env[viteKey];
-    if (process.env[key]) return process.env[key];
+  // 2. Check import.meta.env (Vite build-time)
+  const meta = import.meta as any;
+  if (typeof meta !== 'undefined' && meta.env && meta.env[key]) {
+    return meta.env[key];
+  }
+
+  // 3. Check process.env (Node.js / SSR)
+  if (typeof process !== 'undefined' && process.env && process.env[key]) {
+    return process.env[key];
   }
 
   return undefined;
@@ -19,18 +23,19 @@ const getEnv = (key: string, viteKey?: string) => {
 
 // Access environment variables with fallbacks and trim them
 const supabaseUrl = (
+  localStorage.getItem('manual_supabase_url') ||
   getEnv('VITE_SUPABASE_URL') || 
   getEnv('SUPABASE_URL') || 
-  getEnv('NEXT_PUBLIC_SUPABASE_URL') || 
-  (typeof window !== 'undefined' && (window as any).env?.VITE_SUPABASE_URL)
+  getEnv('NEXT_PUBLIC_SUPABASE_URL')
 )?.trim();
 
 const supabaseKey = (
+  localStorage.getItem('manual_supabase_key') ||
   getEnv('VITE_SUPABASE_ANON_KEY') || 
   getEnv('SUPABASE_KEY') || 
   getEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY') || 
   getEnv('VITE_SUPABASE_KEY') ||
-  (typeof window !== 'undefined' && (window as any).env?.VITE_SUPABASE_ANON_KEY)
+  getEnv('SUPABASE_ANON_KEY')
 )?.trim();
 
 // Detailed logging for production debugging

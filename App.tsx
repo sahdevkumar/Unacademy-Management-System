@@ -40,7 +40,7 @@ import { ThemeProvider } from './context/ThemeContext';
 import { ClassProvider } from './context/ClassContext';
 import { ToastProvider } from './context/ToastContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
-import { supabase } from './services/supabaseClient';
+import { supabase, reinitializeSupabase } from './services/supabaseClient';
 
 const AppContent: React.FC = () => {
   const { isLoading: authLoading, isAuthenticated } = useAuth();
@@ -56,6 +56,7 @@ const AppContent: React.FC = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   useEffect(() => {
+    console.log("AppContent mounted. Supabase status:", supabase ? "INITIALIZED" : "NULL");
     localStorage.setItem('supabase-clone-view', currentView);
   }, [currentView]);
 
@@ -93,12 +94,28 @@ const AppContent: React.FC = () => {
             <p>3. Click "Save" and then **Restart** your container.</p>
             <p className="opacity-50 italic">Note: If you just added them, a restart is required to inject them into the running app.</p>
           </div>
-          <div className="pt-4">
+          <div className="pt-4 space-y-2">
             <button 
               onClick={() => window.location.reload()}
               className="w-full bg-supabase-green text-supabase-bg font-bold py-2 rounded uppercase tracking-widest hover:bg-opacity-90 transition-all"
             >
               Retry Connection
+            </button>
+            <button 
+              onClick={() => {
+                const url = prompt("Enter Supabase URL (e.g., https://xyz.supabase.co):");
+                const key = prompt("Enter Supabase Anon Key:");
+                if (url && key) {
+                  reinitializeSupabase(url, key);
+                  // Store in localStorage for persistence if manual
+                  localStorage.setItem('manual_supabase_url', url);
+                  localStorage.setItem('manual_supabase_key', key);
+                  window.location.reload();
+                }
+              }}
+              className="w-full bg-transparent border border-supabase-border text-supabase-muted font-bold py-2 rounded uppercase tracking-widest hover:bg-supabase-sidebar transition-all text-xs"
+            >
+              Configure Manually
             </button>
           </div>
         </div>
