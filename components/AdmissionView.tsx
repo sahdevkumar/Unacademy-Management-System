@@ -14,12 +14,16 @@ import {
     Calendar,
     Hash,
     MapPin,
-    ShieldCheck
+    ShieldCheck,
+    Briefcase,
+    Phone,
+    Mail
 } from 'lucide-react';
 import { supabase } from '../services/supabaseClient';
 import { scheduleService } from '../services/scheduleService';
 import { useToast } from '../context/ToastContext';
-import { ClassInfo } from '../types';
+import { ClassInfo, Parent, Student } from '../types';
+import { Search as SearchIcon } from 'lucide-react';
 
 interface Registration {
     id: string;
@@ -37,18 +41,25 @@ const AdmissionView: React.FC = () => {
     const { showToast } = useToast();
     const [approvedRegistrations, setApprovedRegistrations] = useState<Registration[]>([]);
     const [classes, setClasses] = useState<ClassInfo[]>([]);
+    const [parents, setParents] = useState<Parent[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     
+    // Parent Search State
+    const [searchTermParent, setSearchTermParent] = useState('');
+    const [showAddParentForm, setShowAddParentForm] = useState(false);
+    const [newParent, setNewParent] = useState<Partial<Parent>>({ full_name: '', phone: '', status: 'active' });
+
     // Admission Modal state
     const [isAdmissionModalOpen, setIsAdmissionModalOpen] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [selectedRegistration, setSelectedRegistration] = useState<Registration | null>(null);
     
-    const [admissionData, setAdmissionData] = useState({
+    const [admissionData, setAdmissionData] = useState<Partial<Student>>({
         full_name: '',
         roll_number: '',
         class_name: '',
+        parent_id: '',
         guardian_name: '',
         contact_number: '',
         email: '',
@@ -65,6 +76,7 @@ const AdmissionView: React.FC = () => {
                 const classData = await scheduleService.getClasses();
                 setClasses(classData);
                 await fetchApprovedRegistrations();
+                await fetchParents();
             } catch (error: any) {
                 showToast("Initialization failed: " + error.message, "error");
             } finally {
@@ -91,16 +103,31 @@ const AdmissionView: React.FC = () => {
         }
     };
 
+    const fetchParents = async () => {
+        if (!supabase) return;
+        try {
+            const { data, error } = await supabase.from('parents').select('*').order('full_name', { ascending: true });
+            if (error) throw error;
+            setParents(data || []);
+        } catch (error: any) {
+            console.error("Failed to fetch parents:", error.message);
+        }
+    };
+
     const handleStartAdmission = (reg: Registration) => {
         setSelectedRegistration(reg);
         
         // Find class name from class_id
         const targetClass = classes.find(c => c.id === reg.class_id);
         
+        // Try to find parent by phone
+        const existingParent = parents.find(p => p.phone === reg.phone);
+
         setAdmissionData({
             full_name: reg.student_name,
             roll_number: '', // To be filled
             class_name: targetClass?.name || '',
+            parent_id: existingParent?.id || '',
             guardian_name: reg.parent_name,
             contact_number: reg.phone,
             email: reg.email || '',
@@ -109,6 +136,16 @@ const AdmissionView: React.FC = () => {
             gender: 'Male',
             status: 'active'
         });
+        setSearchTermParent(existingParent?.full_name || reg.parent_name);
+        setShowAddParentForm(!existingParent);
+        if (!existingParent) {
+            setNewParent({
+                full_name: reg.parent_name,
+                phone: reg.phone,
+                email: reg.email,
+                status: 'active'
+            });
+        }
         setIsAdmissionModalOpen(true);
     };
 
@@ -118,6 +155,7 @@ const AdmissionView: React.FC = () => {
             full_name: '',
             roll_number: '',
             class_name: classes[0]?.name || '',
+            parent_id: '',
             guardian_name: '',
             contact_number: '',
             email: '',
@@ -126,6 +164,9 @@ const AdmissionView: React.FC = () => {
             gender: 'Male',
             status: 'active'
         });
+        setSearchTermParent('');
+        setShowAddParentForm(false);
+        setNewParent({ full_name: '', phone: '', status: 'active' });
         setIsAdmissionModalOpen(true);
     };
 
@@ -135,10 +176,41 @@ const AdmissionView: React.FC = () => {
         
         setIsSubmitting(true);
         try {
+            let finalParentId = admissionData.parent_id;
+            let finalGuardianName = admissionData.guardian_name;
+            let finalContactNumber = admissionData.contact_number;
+
+            // If adding a new parent
+            if (showAddParentForm && newParent.full_name && newParent.phone) {
+                const { data: parentData, error: parentError } = await supabase
+                    .from('parents')
+                    .insert({
+                        full_name: newParent.full_name,
+                        phone: newParent.phone,
+                        email: newParent.email,
+                        address: newParent.address,
+                        occupation: newParent.occupation,
+                        status: 'active'
+                    })
+                    .select()
+                    .single();
+
+                if (parentError) throw parentError;
+                finalParentId = parentData.id;
+                finalGuardianName = newParent.full_name;
+                finalContactNumber = newParent.phone;
+                await fetchParents(); // Refresh parents list
+            }
+
             // 1. Create student record
             const { error: studentError } = await supabase
                 .from('students')
-                .insert([admissionData]);
+                .insert([{
+                    ...admissionData,
+                    parent_id: finalParentId,
+                    guardian_name: finalGuardianName,
+                    contact_number: finalContactNumber
+                }]);
             
             if (studentError) throw studentError;
             
@@ -322,107 +394,261 @@ const AdmissionView: React.FC = () => {
                                 <X size={20} />
                             </button>
                         </div>
-                        <form onSubmit={handleSubmitAdmission} className="p-6">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                        <form onSubmit={handleSubmitAdmission} className="p-6 max-h-[85vh] overflow-y-auto">
+                            <div className="space-y-6 mb-6">
+                                {/* Student Details Section */}
                                 <div className="space-y-4">
-                                    <div className="space-y-2">
-                                        <label className="text-[10px] font-bold text-supabase-muted uppercase tracking-widest">Full Name</label>
-                                        <div className="relative">
-                                            <User className="absolute left-3 top-1/2 -translate-y-1/2 text-supabase-muted" size={16} />
-                                            <input 
-                                                required
-                                                type="text"
-                                                value={admissionData.full_name}
-                                                onChange={(e) => setAdmissionData({...admissionData, full_name: e.target.value})}
-                                                className="w-full bg-supabase-sidebar border border-supabase-border rounded-lg pl-10 pr-4 py-2 text-sm text-supabase-text focus:outline-none focus:border-supabase-green transition-all"
-                                                placeholder="Student's Full Name"
-                                            />
+                                    <div className="flex items-center gap-2 pb-2 border-b border-supabase-border">
+                                        <div className="w-1 h-4 bg-supabase-green rounded-full"></div>
+                                        <h3 className="text-[11px] font-bold text-supabase-text uppercase tracking-widest">Student Information</h3>
+                                    </div>
+                                    
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div className="md:col-span-2 space-y-2">
+                                            <label className="text-[10px] font-bold text-supabase-muted uppercase tracking-widest">Full Name</label>
+                                            <div className="relative">
+                                                <User className="absolute left-3 top-1/2 -translate-y-1/2 text-supabase-muted" size={16} />
+                                                <input 
+                                                    required
+                                                    type="text"
+                                                    value={admissionData.full_name}
+                                                    onChange={(e) => setAdmissionData({...admissionData, full_name: e.target.value})}
+                                                    className="w-full bg-supabase-sidebar border border-supabase-border rounded-lg pl-10 pr-4 py-2 text-sm text-supabase-text focus:outline-none focus:border-supabase-green transition-all"
+                                                    placeholder="Student's Full Name"
+                                                />
+                                            </div>
                                         </div>
-                                    </div>
-                                    <div className="space-y-2">
-                                        <label className="text-[10px] font-bold text-supabase-muted uppercase tracking-widest">Roll Number</label>
-                                        <div className="relative">
-                                            <Hash className="absolute left-3 top-1/2 -translate-y-1/2 text-supabase-muted" size={16} />
-                                            <input 
-                                                required
-                                                type="text"
-                                                value={admissionData.roll_number}
-                                                onChange={(e) => setAdmissionData({...admissionData, roll_number: e.target.value})}
-                                                className="w-full bg-supabase-sidebar border border-supabase-border rounded-lg pl-10 pr-4 py-2 text-sm text-supabase-text focus:outline-none focus:border-supabase-green transition-all"
-                                                placeholder="e.g. 2024-001"
-                                            />
+
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-bold text-supabase-muted uppercase tracking-widest">Roll Number</label>
+                                            <div className="relative">
+                                                <Hash className="absolute left-3 top-1/2 -translate-y-1/2 text-supabase-muted" size={16} />
+                                                <input 
+                                                    required
+                                                    type="text"
+                                                    value={admissionData.roll_number}
+                                                    onChange={(e) => setAdmissionData({...admissionData, roll_number: e.target.value})}
+                                                    className="w-full bg-supabase-sidebar border border-supabase-border rounded-lg pl-10 pr-4 py-2 text-sm text-supabase-text focus:outline-none focus:border-supabase-green transition-all"
+                                                    placeholder="e.g. 2024-001"
+                                                />
+                                            </div>
                                         </div>
-                                    </div>
-                                    <div className="space-y-2">
-                                        <label className="text-[10px] font-bold text-supabase-muted uppercase tracking-widest">Class Assignment</label>
-                                        <select 
-                                            required
-                                            value={admissionData.class_name}
-                                            onChange={(e) => setAdmissionData({...admissionData, class_name: e.target.value})}
-                                            className="w-full bg-supabase-sidebar border border-supabase-border rounded-lg px-4 py-2 text-sm text-supabase-text focus:outline-none focus:border-supabase-green transition-all"
-                                        >
-                                            {classes.map(c => (
-                                                <option key={c.id} value={c.name}>{c.name} - {c.section}</option>
-                                            ))}
-                                        </select>
-                                    </div>
-                                    <div className="space-y-2">
-                                        <label className="text-[10px] font-bold text-supabase-muted uppercase tracking-widest">Gender</label>
-                                        <div className="flex gap-4">
-                                            {['Male', 'Female', 'Other'].map(g => (
-                                                <label key={g} className="flex items-center gap-2 cursor-pointer">
-                                                    <input 
-                                                        type="radio"
-                                                        name="gender"
-                                                        value={g}
-                                                        checked={admissionData.gender === g}
-                                                        onChange={(e) => setAdmissionData({...admissionData, gender: e.target.value})}
-                                                        className="accent-supabase-green"
-                                                    />
-                                                    <span className="text-xs text-supabase-text">{g}</span>
-                                                </label>
-                                            ))}
+
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-bold text-supabase-muted uppercase tracking-widest">Date of Birth</label>
+                                            <div className="relative">
+                                                <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-supabase-muted" size={16} />
+                                                <input 
+                                                    required
+                                                    type="date"
+                                                    value={admissionData.date_of_birth}
+                                                    onChange={(e) => setAdmissionData({...admissionData, date_of_birth: e.target.value})}
+                                                    className="w-full bg-supabase-sidebar border border-supabase-border rounded-lg pl-10 pr-4 py-2 text-sm text-supabase-text focus:outline-none focus:border-supabase-green transition-all"
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-bold text-supabase-muted uppercase tracking-widest">Class Assignment</label>
+                                            <select 
+                                                required
+                                                value={admissionData.class_name}
+                                                onChange={(e) => setAdmissionData({...admissionData, class_name: e.target.value})}
+                                                className="w-full bg-supabase-sidebar border border-supabase-border rounded-lg px-4 py-2 text-sm text-supabase-text focus:outline-none focus:border-supabase-green transition-all"
+                                            >
+                                                {classes.map(c => (
+                                                    <option key={c.id} value={c.name}>{c.name} - {c.section}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-bold text-supabase-muted uppercase tracking-widest">Gender</label>
+                                            <div className="flex gap-4 h-9 items-center">
+                                                {['Male', 'Female', 'Other'].map(g => (
+                                                    <label key={g} className="flex items-center gap-2 cursor-pointer">
+                                                        <input 
+                                                            type="radio"
+                                                            name="gender"
+                                                            value={g}
+                                                            checked={admissionData.gender === g}
+                                                            onChange={(e) => setAdmissionData({...admissionData, gender: e.target.value})}
+                                                            className="accent-supabase-green"
+                                                        />
+                                                        <span className="text-xs text-supabase-text">{g}</span>
+                                                    </label>
+                                                ))}
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
 
+                                {/* Guardian Details Section */}
                                 <div className="space-y-4">
-                                    <div className="space-y-2">
-                                        <label className="text-[10px] font-bold text-supabase-muted uppercase tracking-widest">Date of Birth</label>
-                                        <div className="relative">
-                                            <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-supabase-muted" size={16} />
-                                            <input 
-                                                required
-                                                type="date"
-                                                value={admissionData.date_of_birth}
-                                                onChange={(e) => setAdmissionData({...admissionData, date_of_birth: e.target.value})}
-                                                className="w-full bg-supabase-sidebar border border-supabase-border rounded-lg pl-10 pr-4 py-2 text-sm text-supabase-text focus:outline-none focus:border-supabase-green transition-all"
-                                            />
+                                    <div className="flex items-center gap-2 pb-2 border-b border-supabase-border">
+                                        <div className="w-1 h-4 bg-supabase-green rounded-full"></div>
+                                        <h3 className="text-[11px] font-bold text-supabase-text uppercase tracking-widest">Guardian Information</h3>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div className="md:col-span-2 space-y-2 relative">
+                                            <label className="text-[10px] font-bold text-supabase-muted uppercase tracking-widest">
+                                                Guardian Name
+                                            </label>
+                                            <div className="relative">
+                                                <User className="absolute left-3 top-1/2 -translate-y-1/2 text-supabase-muted" size={16} />
+                                                <input 
+                                                    required
+                                                    type="text"
+                                                    value={admissionData.guardian_name}
+                                                    onChange={(e) => {
+                                                        setAdmissionData({...admissionData, guardian_name: e.target.value});
+                                                        setSearchTermParent(e.target.value);
+                                                    }}
+                                                    className="w-full bg-supabase-sidebar border border-supabase-border rounded-lg pl-10 pr-10 py-2 text-sm text-supabase-text focus:outline-none focus:border-supabase-green transition-all"
+                                                    placeholder="Search or Enter Guardian Name"
+                                                />
+                                                <button 
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setShowAddParentForm(!showAddParentForm);
+                                                        if (!showAddParentForm) {
+                                                            setNewParent({ ...newParent, full_name: admissionData.guardian_name });
+                                                        }
+                                                    }}
+                                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-supabase-green hover:text-supabase-green/80 transition-colors p-1 rounded-md hover:bg-supabase-green/10"
+                                                    title="Add New Parent"
+                                                >
+                                                    <Plus size={18} />
+                                                </button>
+                                                
+                                                {searchTermParent && !showAddParentForm && !admissionData.parent_id && (
+                                                    <div className="absolute z-20 left-0 right-0 mt-1 bg-supabase-sidebar border border-supabase-border rounded-xl shadow-2xl max-h-48 overflow-y-auto">
+                                                        {parents
+                                                            .filter(p => 
+                                                                p.full_name.toLowerCase().includes(searchTermParent.toLowerCase()) || 
+                                                                p.phone.includes(searchTermParent)
+                                                            )
+                                                            .map(parent => (
+                                                                <button
+                                                                    key={parent.id}
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                        setAdmissionData({ 
+                                                                            ...admissionData, 
+                                                                            parent_id: parent.id, 
+                                                                            guardian_name: parent.full_name, 
+                                                                            contact_number: parent.phone,
+                                                                            address: parent.address || admissionData.address
+                                                                        });
+                                                                        setSearchTermParent('');
+                                                                        setShowAddParentForm(false);
+                                                                    }}
+                                                                    className="w-full px-4 py-2 text-left text-sm hover:bg-supabase-hover flex items-center justify-between group"
+                                                                >
+                                                                    <div>
+                                                                        <div className="font-bold text-supabase-text">{parent.full_name}</div>
+                                                                        <div className="text-[10px] text-supabase-muted">{parent.phone}</div>
+                                                                    </div>
+                                                                    {admissionData.parent_id === parent.id && <CheckCircle2 size={14} className="text-supabase-green" />}
+                                                                </button>
+                                                            ))
+                                                        }
+                                                    </div>
+                                                )}
+                                            </div>
+                                            
+                                            {admissionData.parent_id && !showAddParentForm && (
+                                                <div className="flex items-center gap-2 mt-1 px-2 py-1 bg-supabase-green/10 border border-supabase-green/20 rounded-md">
+                                                    <CheckCircle2 size={12} className="text-supabase-green" />
+                                                    <span className="text-[10px] text-supabase-green font-medium">Linked to existing record</span>
+                                                    <button 
+                                                        type="button"
+                                                        onClick={() => setAdmissionData({...admissionData, parent_id: ''})}
+                                                        className="ml-auto text-[10px] text-supabase-muted hover:text-supabase-red"
+                                                    >
+                                                        Unlink
+                                                    </button>
+                                                </div>
+                                            )}
                                         </div>
-                                    </div>
-                                    <div className="space-y-2">
-                                        <label className="text-[10px] font-bold text-supabase-muted uppercase tracking-widest">Guardian Name</label>
-                                        <input 
-                                            required
-                                            type="text"
-                                            value={admissionData.guardian_name}
-                                            onChange={(e) => setAdmissionData({...admissionData, guardian_name: e.target.value})}
-                                            className="w-full bg-supabase-sidebar border border-supabase-border rounded-lg px-4 py-2 text-sm text-supabase-text focus:outline-none focus:border-supabase-green transition-all"
-                                            placeholder="Parent/Guardian Name"
-                                        />
-                                    </div>
-                                    <div className="space-y-2">
-                                        <label className="text-[10px] font-bold text-supabase-muted uppercase tracking-widest">Address</label>
-                                        <div className="relative">
-                                            <MapPin className="absolute left-3 top-3 text-supabase-muted" size={16} />
-                                            <textarea 
-                                                required
-                                                rows={3}
-                                                value={admissionData.address}
-                                                onChange={(e) => setAdmissionData({...admissionData, address: e.target.value})}
-                                                className="w-full bg-supabase-sidebar border border-supabase-border rounded-lg pl-10 pr-4 py-2 text-sm text-supabase-text focus:outline-none focus:border-supabase-green transition-all resize-none"
-                                                placeholder="Full Residential Address"
-                                            />
+
+                                        {showAddParentForm && (
+                                            <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-supabase-bg/50 border border-supabase-border rounded-xl animate-in fade-in slide-in-from-top-2">
+                                                <div className="md:col-span-2 flex items-center justify-between mb-1">
+                                                    <span className="text-[10px] font-bold text-supabase-text uppercase tracking-widest">New Parent Details</span>
+                                                    <button 
+                                                        type="button"
+                                                        onClick={() => setShowAddParentForm(false)}
+                                                        className="text-[10px] text-supabase-muted hover:text-supabase-red"
+                                                    >
+                                                        Cancel
+                                                    </button>
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <label className="text-[10px] text-supabase-muted uppercase font-bold">Full Name</label>
+                                                    <div className="relative">
+                                                        <User className="absolute left-3 top-1/2 -translate-y-1/2 text-supabase-muted" size={14} />
+                                                        <input 
+                                                            type="text"
+                                                            value={newParent.full_name}
+                                                            onChange={(e) => setNewParent({...newParent, full_name: e.target.value})}
+                                                            className="w-full bg-supabase-sidebar border border-supabase-border rounded-lg pl-9 pr-3 py-1.5 text-sm text-supabase-text focus:outline-none focus:border-supabase-green"
+                                                        />
+                                                    </div>
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <label className="text-[10px] text-supabase-muted uppercase font-bold">Phone</label>
+                                                    <div className="relative">
+                                                        <Phone className="absolute left-3 top-1/2 -translate-y-1/2 text-supabase-muted" size={14} />
+                                                        <input 
+                                                            type="text"
+                                                            value={newParent.phone}
+                                                            onChange={(e) => setNewParent({...newParent, phone: e.target.value})}
+                                                            className="w-full bg-supabase-sidebar border border-supabase-border rounded-lg pl-9 pr-3 py-1.5 text-sm text-supabase-text focus:outline-none focus:border-supabase-green"
+                                                        />
+                                                    </div>
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <label className="text-[10px] text-supabase-muted uppercase font-bold">Email</label>
+                                                    <div className="relative">
+                                                        <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-supabase-muted" size={14} />
+                                                        <input 
+                                                            type="email"
+                                                            value={newParent.email}
+                                                            onChange={(e) => setNewParent({...newParent, email: e.target.value})}
+                                                            className="w-full bg-supabase-sidebar border border-supabase-border rounded-lg pl-9 pr-3 py-1.5 text-sm text-supabase-text focus:outline-none focus:border-supabase-green"
+                                                        />
+                                                    </div>
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <label className="text-[10px] text-supabase-muted uppercase font-bold">Occupation</label>
+                                                    <div className="relative">
+                                                        <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 text-supabase-muted" size={14} />
+                                                        <input 
+                                                            type="text"
+                                                            value={newParent.occupation}
+                                                            onChange={(e) => setNewParent({...newParent, occupation: e.target.value})}
+                                                            className="w-full bg-supabase-sidebar border border-supabase-border rounded-lg pl-9 pr-3 py-1.5 text-sm text-supabase-text focus:outline-none focus:border-supabase-green"
+                                                        />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        <div className="md:col-span-2 space-y-2">
+                                            <label className="text-[10px] font-bold text-supabase-muted uppercase tracking-widest">Address</label>
+                                            <div className="relative">
+                                                <MapPin className="absolute left-3 top-3 text-supabase-muted" size={16} />
+                                                <textarea 
+                                                    required
+                                                    rows={2}
+                                                    value={admissionData.address}
+                                                    onChange={(e) => setAdmissionData({...admissionData, address: e.target.value})}
+                                                    className="w-full bg-supabase-sidebar border border-supabase-border rounded-lg pl-10 pr-4 py-2 text-sm text-supabase-text focus:outline-none focus:border-supabase-green transition-all resize-none"
+                                                    placeholder="Full Residential Address"
+                                                />
+                                            </div>
                                         </div>
                                     </div>
                                 </div>

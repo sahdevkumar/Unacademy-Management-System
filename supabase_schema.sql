@@ -28,6 +28,22 @@ CREATE TABLE IF NOT EXISTS system_config (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
+-- 1.5. Human Resources (Moved up to avoid forward reference)
+CREATE TABLE IF NOT EXISTS employees (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    full_name TEXT NOT NULL,
+    email TEXT UNIQUE NOT NULL,
+    mobile TEXT,
+    job_role TEXT,
+    department TEXT,
+    designation TEXT,
+    salary_grade_id TEXT,
+    base_salary NUMERIC DEFAULT 0,
+    allowances NUMERIC DEFAULT 0,
+    status TEXT DEFAULT 'active',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Update system_users to link with Supabase Auth
 CREATE TABLE IF NOT EXISTS system_users (
     id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -35,6 +51,7 @@ CREATE TABLE IF NOT EXISTS system_users (
     email TEXT UNIQUE NOT NULL,
     role TEXT NOT NULL DEFAULT 'viewer',
     mobile TEXT,
+    employee_id UUID REFERENCES employees(id),
     status TEXT DEFAULT 'active',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
@@ -110,6 +127,25 @@ CREATE TABLE IF NOT EXISTS students (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS parents (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    full_name TEXT NOT NULL,
+    email TEXT,
+    phone TEXT NOT NULL,
+    address TEXT,
+    occupation TEXT,
+    status TEXT DEFAULT 'active',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Add parent_id to students if not exists
+DO $$ 
+BEGIN 
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='students' AND column_name='parent_id') THEN
+        ALTER TABLE students ADD COLUMN parent_id UUID REFERENCES parents(id);
+    END IF;
+END $$;
+
 CREATE TABLE IF NOT EXISTS weekly_schedules (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     class TEXT REFERENCES classes(name),
@@ -149,29 +185,19 @@ CREATE TABLE IF NOT EXISTS enquiry_leads (
     student_name TEXT NOT NULL,
     parent_name TEXT,
     phone TEXT NOT NULL,
+    alt_phone TEXT,
     email TEXT,
     source TEXT,
+    temp TEXT,
     status TEXT DEFAULT 'new',
+    note TEXT,
+    last_contact DATE,
     call_history JSONB DEFAULT '[]'::jsonb,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
 -- 5. Human Resources & Payroll
-CREATE TABLE IF NOT EXISTS employees (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    full_name TEXT NOT NULL,
-    email TEXT UNIQUE NOT NULL,
-    mobile TEXT,
-    job_role TEXT,
-    department TEXT,
-    designation TEXT,
-    salary_grade_id TEXT,
-    base_salary NUMERIC DEFAULT 0,
-    allowances NUMERIC DEFAULT 0,
-    status TEXT DEFAULT 'active',
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-);
-
 CREATE TABLE IF NOT EXISTS personnel_tasks (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     title TEXT NOT NULL,
@@ -251,10 +277,14 @@ ALTER TABLE payroll_settings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE user_assignments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE registrations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE student_feedback ENABLE ROW LEVEL SECURITY;
+ALTER TABLE parents ENABLE ROW LEVEL SECURITY;
 
 -- Create permissive policies for all tables (Public access for demo/internal system)
 DROP POLICY IF EXISTS "Allow all on system_config" ON system_config;
 CREATE POLICY "Allow all on system_config" ON system_config FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow all on parents" ON parents;
+CREATE POLICY "Allow all on parents" ON parents FOR ALL USING (true) WITH CHECK (true);
 
 DROP POLICY IF EXISTS "Allow all on system_users" ON system_users;
 CREATE POLICY "Allow all on system_users" ON system_users FOR ALL USING (true) WITH CHECK (true);

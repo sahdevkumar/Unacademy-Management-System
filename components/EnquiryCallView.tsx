@@ -104,7 +104,7 @@ const EnquiryCallView: React.FC = () => {
             const { data, error } = await supabase
                 .from('enquiry_leads')
                 .select('*')
-                .order('updated_at', { ascending: false });
+                .order('created_at', { ascending: false });
 
             if (error) throw error;
             setLeads(data as EnquiryLead[] || []);
@@ -140,7 +140,6 @@ const EnquiryCallView: React.FC = () => {
                     status, 
                     note: note || currentLead?.note, 
                     last_contact: now.split('T')[0],
-                    updated_at: now,
                     call_history: updatedHistory
                 })
                 .eq('id', id);
@@ -175,8 +174,7 @@ const EnquiryCallView: React.FC = () => {
             const { error } = await supabase
                 .from('enquiry_leads')
                 .update({ 
-                    call_history: updatedHistory,
-                    updated_at: now
+                    call_history: updatedHistory
                 })
                 .eq('id', selectedLeadIdForHistory);
 

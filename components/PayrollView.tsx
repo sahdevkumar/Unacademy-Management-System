@@ -8,13 +8,13 @@ interface PayrollRecord {
   employee_id: string;
   employee_name: string;
   department: string;
+  month: string;
   base_salary: number;
   allowances: number;
   deductions: number;
-  tax_amount: number;
-  net_payable: number;
-  payment_status: 'paid' | 'pending' | 'processing';
-  pay_date: string | null;
+  net_salary: number;
+  status: 'paid' | 'pending' | 'processing';
+  paid_at: string | null;
 }
 
 const PayrollView: React.FC = () => {
@@ -50,20 +50,20 @@ const PayrollView: React.FC = () => {
           const base = existing?.base_salary || 3500 + (Math.random() * 2000);
           const allow = existing?.allowances || 200 + (Math.random() * 300);
           const ded = existing?.deductions || 100;
-          const tax = base * 0.15; // 15% flat tax simulation
+          const net = existing?.net_salary || (base + allow - ded) * 0.85; // Simple net calc if not exists
 
           return {
             id: existing?.id || Math.random().toString(36).substr(2, 9),
             employee_id: emp.id,
             employee_name: emp.full_name,
             department: emp.department || 'Unassigned',
+            month: existing?.month || '2025-03',
             base_salary: base,
             allowances: allow,
             deductions: ded,
-            tax_amount: tax,
-            net_payable: base + allow - ded - tax,
-            payment_status: (existing?.payment_status as any) || 'pending',
-            pay_date: existing?.disbursed_at || null
+            net_salary: net,
+            status: (existing?.status as any) || 'pending',
+            paid_at: existing?.paid_at || null
           };
         });
 
@@ -91,37 +91,64 @@ const PayrollView: React.FC = () => {
   // Totals calculation
   const totals = useMemo(() => {
     return {
-      disbursement: records.reduce((acc, curr) => acc + curr.net_payable, 0),
-      tax: records.reduce((acc, curr) => acc + curr.tax_amount, 0),
-      paid: records.filter(r => r.payment_status === 'paid').length,
-      pending: records.filter(r => r.payment_status === 'pending').length
+      disbursement: records.reduce((acc, curr) => acc + curr.net_salary, 0),
+      tax: records.reduce((acc, curr) => acc + (curr.base_salary * 0.15), 0),
+      paid: records.filter(r => r.status === 'paid').length,
+      pending: records.filter(r => r.status === 'pending').length
     };
   }, [records]);
 
   // Bulk process simulation
   const handleBulkProcess = async () => {
+    if (!supabase) return;
     setIsProcessingBulk(true);
     showToast(`Initializing funds transfer for ${records.length} records...`, "info");
     
-    // Simulate API delay for banking gateway
-    await new Promise(resolve => setTimeout(resolve, 2500));
+    try {
+      const pendingIds = records.filter(r => r.status === 'pending').map(r => r.id);
+      
+      if (pendingIds.length > 0) {
+        // In a real app, we would update the database
+        const { error } = await supabase
+          .from('payroll_records')
+          .update({ status: 'paid', paid_at: new Date().toISOString() })
+          .in('id', pendingIds);
+        
+        if (error) throw error;
+      }
 
-    const updated = records.map(r => ({
-      ...r,
-      payment_status: 'paid' as const,
-      pay_date: new Date().toISOString()
-    }));
+      const updated = records.map(r => ({
+        ...r,
+        status: 'paid' as const,
+        paid_at: new Date().toISOString()
+      }));
 
-    setRecords(updated);
-    setIsProcessingBulk(false);
-    showToast("Global Disbursement Successful. Ledger Synced.", "success");
+      setRecords(updated);
+      showToast("Global Disbursement Successful. Ledger Synced.", "success");
+    } catch (e: any) {
+      showToast("Bulk processing failed: " + e.message, "error");
+    } finally {
+      setIsProcessingBulk(false);
+    }
   };
 
-  const handleMarkAsPaid = (id: string) => {
-    setRecords(prev => prev.map(r => 
-      r.id === id ? { ...r, payment_status: 'paid', pay_date: new Date().toISOString() } : r
-    ));
-    showToast("Transaction #TXN-" + id.slice(0, 4).toUpperCase() + " Completed", "success");
+  const handleMarkAsPaid = async (id: string) => {
+    if (!supabase) return;
+    try {
+      const { error } = await supabase
+        .from('payroll_records')
+        .update({ status: 'paid', paid_at: new Date().toISOString() })
+        .eq('id', id);
+      
+      if (error) throw error;
+
+      setRecords(prev => prev.map(r => 
+        r.id === id ? { ...r, status: 'paid', paid_at: new Date().toISOString() } : r
+      ));
+      showToast("Transaction #TXN-" + id.slice(0, 4).toUpperCase() + " Completed", "success");
+    } catch (e: any) {
+      showToast("Payment update failed: " + e.message, "error");
+    }
   };
 
   return (
@@ -286,26 +313,26 @@ const PayrollView: React.FC = () => {
                          </div>
                       </td>
                       <td className="px-8 py-5">
-                        <span className="text-xs font-bold text-supabase-muted font-mono">${record.tax_amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                        <span className="text-xs font-bold text-supabase-muted font-mono">${(record.base_salary * 0.15).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                       </td>
                       <td className="px-8 py-5">
-                        <span className="text-sm font-black text-supabase-green font-mono tracking-tighter">${record.net_payable.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                        <span className="text-sm font-black text-supabase-green font-mono tracking-tighter">${record.net_salary.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                       </td>
                       <td className="px-8 py-5">
                          <div className="flex flex-col gap-1.5">
                            <span className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-widest inline-flex items-center gap-2 w-fit
-                             ${record.payment_status === 'paid' ? 'bg-green-900/20 text-green-400 border border-green-900/50' : 
+                             ${record.status === 'paid' ? 'bg-green-900/20 text-green-400 border border-green-900/50' : 
                                'bg-yellow-900/20 text-yellow-400 border border-yellow-900/50'}
                            `}>
-                              <div className={`w-1.5 h-1.5 rounded-full ${record.payment_status === 'paid' ? 'bg-green-400' : 'bg-yellow-400 animate-pulse'}`} />
-                              {record.payment_status}
+                              <div className={`w-1.5 h-1.5 rounded-full ${record.status === 'paid' ? 'bg-green-400' : 'bg-yellow-400 animate-pulse'}`} />
+                              {record.status}
                            </span>
-                           {record.pay_date && <span className="text-[8px] text-supabase-muted font-mono">{new Date(record.pay_date).toLocaleDateString()}</span>}
+                           {record.paid_at && <span className="text-[8px] text-supabase-muted font-mono">{new Date(record.paid_at).toLocaleDateString()}</span>}
                          </div>
                       </td>
                       <td className="px-8 py-5 text-right">
                         <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-all">
-                          {record.payment_status === 'pending' && (
+                          {record.status === 'pending' && (
                             <button 
                               onClick={() => handleMarkAsPaid(record.id)}
                               className="p-2 bg-supabase-green/10 text-supabase-green hover:bg-supabase-green hover:text-black rounded-lg transition-all"

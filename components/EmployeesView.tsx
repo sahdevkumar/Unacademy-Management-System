@@ -19,6 +19,17 @@ interface Employee {
   created_at?: string;
 }
 
+interface PersonnelTask {
+  id: string;
+  title: string;
+  description: string;
+  assigned_to: string;
+  due_date: string;
+  priority: 'low' | 'medium' | 'high';
+  status: 'pending' | 'in-progress' | 'completed';
+  created_at: string;
+}
+
 type ProfileTab = 'overview' | 'document' | 'work_progress';
 
 const EmployeesView: React.FC = () => {
@@ -43,6 +54,10 @@ const EmployeesView: React.FC = () => {
 
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string | null>(null);
   const [activeProfileTab, setActiveProfileTab] = useState<ProfileTab>('overview');
+  const [employeeTasks, setEmployeeTasks] = useState<PersonnelTask[]>([]);
+  const [isTasksLoading, setIsTasksLoading] = useState(false);
+  const [isAddingTask, setIsAddingTask] = useState(false);
+  const [newTaskData, setNewTaskData] = useState({ title: '', description: '', due_date: '', priority: 'medium' });
 
   const [formData, setFormData] = useState<Partial<Employee>>({
     full_name: '',
@@ -59,6 +74,87 @@ const EmployeesView: React.FC = () => {
     fetchEmployees();
     fetchSubjects();
   }, []);
+
+  useEffect(() => {
+    if (selectedEmployeeId && activeProfileTab === 'work_progress') {
+      fetchEmployeeTasks(selectedEmployeeId);
+    }
+  }, [selectedEmployeeId, activeProfileTab]);
+
+  const fetchEmployeeTasks = async (empId: string) => {
+    if (!supabase) return;
+    setIsTasksLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('personnel_tasks')
+        .select('*')
+        .eq('assigned_to', empId)
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      setEmployeeTasks(data as PersonnelTask[] || []);
+    } catch (e: any) {
+      showToast("Failed to fetch tasks: " + e.message, "error");
+    } finally {
+      setIsTasksLoading(false);
+    }
+  };
+
+  const handleAddTask = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!supabase || !selectedEmployeeId) return;
+    
+    try {
+      const { error } = await supabase
+        .from('personnel_tasks')
+        .insert([{
+          ...newTaskData,
+          assigned_to: selectedEmployeeId,
+          status: 'pending'
+        }]);
+      
+      if (error) throw error;
+      showToast("Task assigned successfully", "success");
+      setIsAddingTask(false);
+      setNewTaskData({ title: '', description: '', due_date: '', priority: 'medium' });
+      fetchEmployeeTasks(selectedEmployeeId);
+    } catch (e: any) {
+      showToast("Failed to add task: " + e.message, "error");
+    }
+  };
+
+  const updateTaskStatus = async (taskId: string, newStatus: string) => {
+    if (!supabase || !selectedEmployeeId) return;
+    try {
+      const { error } = await supabase
+        .from('personnel_tasks')
+        .update({ status: newStatus })
+        .eq('id', taskId);
+      
+      if (error) throw error;
+      fetchEmployeeTasks(selectedEmployeeId);
+    } catch (e: any) {
+      showToast("Update failed: " + e.message, "error");
+    }
+  };
+
+  const handleDeleteTask = async (taskId: string) => {
+    if (!supabase || !selectedEmployeeId) return;
+    if (!window.confirm("Are you sure you want to delete this task?")) return;
+    
+    try {
+      const { error } = await supabase
+        .from('personnel_tasks')
+        .delete()
+        .eq('id', taskId);
+      
+      if (error) throw error;
+      showToast("Task deleted successfully", "success");
+      fetchEmployeeTasks(selectedEmployeeId);
+    } catch (e: any) {
+      showToast("Deletion failed: " + e.message, "error");
+    }
+  };
 
   const fetchEmployees = async () => {
     setIsLoading(true);
@@ -229,26 +325,147 @@ const EmployeesView: React.FC = () => {
         );
       case 'work_progress':
         return (
-          <div className="space-y-6 animate-in fade-in slide-in-from-top-2">
-            <h3 className="text-sm font-black uppercase tracking-widest text-supabase-text">Active KPIs & Work Progress</h3>
+          <div className="space-y-6 animate-in fade-in slide-in-from-top-2 pb-12">
+            <div className="flex justify-between items-center">
+              <h3 className="text-sm font-black uppercase tracking-widest text-supabase-text">Active KPIs & Work Progress</h3>
+              <button 
+                onClick={() => setIsAddingTask(true)}
+                className="bg-supabase-green text-black px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest flex items-center gap-2 hover:bg-supabase-greenHover transition-all shadow-lg shadow-supabase-green/20"
+              >
+                <Plus size={14} /> Assign Task
+              </button>
+            </div>
+
+            {isAddingTask && (
+              <div className="bg-supabase-panel border border-supabase-green/30 rounded-2xl p-6 animate-in slide-in-from-top-4">
+                <form onSubmit={handleAddTask} className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <input 
+                      required
+                      placeholder="Task Title"
+                      value={newTaskData.title}
+                      onChange={e => setNewTaskData({...newTaskData, title: e.target.value})}
+                      className="bg-supabase-bg border border-supabase-border rounded-xl px-4 py-2 text-xs text-supabase-text outline-none focus:border-supabase-green"
+                    />
+                    <input 
+                      required
+                      type="date"
+                      value={newTaskData.due_date}
+                      onChange={e => setNewTaskData({...newTaskData, due_date: e.target.value})}
+                      className="bg-supabase-bg border border-supabase-border rounded-xl px-4 py-2 text-xs text-supabase-text outline-none focus:border-supabase-green"
+                    />
+                  </div>
+                  <textarea 
+                    placeholder="Task Description"
+                    value={newTaskData.description}
+                    onChange={e => setNewTaskData({...newTaskData, description: e.target.value})}
+                    className="w-full bg-supabase-bg border border-supabase-border rounded-xl px-4 py-2 text-xs text-supabase-text outline-none focus:border-supabase-green h-20"
+                  />
+                  <div className="flex justify-between items-center">
+                    <select 
+                      value={newTaskData.priority}
+                      onChange={e => setNewTaskData({...newTaskData, priority: e.target.value as any})}
+                      className="bg-supabase-bg border border-supabase-border rounded-xl px-4 py-2 text-xs text-supabase-text outline-none"
+                    >
+                      <option value="low">Low Priority</option>
+                      <option value="medium">Medium Priority</option>
+                      <option value="high">High Priority</option>
+                    </select>
+                    <div className="flex gap-2">
+                      <button type="button" onClick={() => setIsAddingTask(false)} className="px-4 py-2 text-[10px] font-black text-supabase-muted uppercase tracking-widest">Cancel</button>
+                      <button type="submit" className="bg-supabase-green text-black px-6 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest">Create Task</button>
+                    </div>
+                  </div>
+                </form>
+              </div>
+            )}
+
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {[
-                { label: 'Course Completion Rate', val: 82, color: 'bg-supabase-green', text: 'text-supabase-green' },
+                { 
+                  label: 'Task Completion Rate', 
+                  val: employeeTasks.length > 0 ? Math.round((employeeTasks.filter(t => t.status === 'completed').length / employeeTasks.length) * 100) : 0, 
+                  color: 'bg-supabase-green', 
+                  text: 'text-supabase-green' 
+                },
                 { label: 'Attendance Consistency', val: 98, color: 'bg-blue-400', text: 'text-blue-400' },
                 { label: 'Student Satisfaction', val: 94, color: 'bg-purple-400', text: 'text-purple-400' },
-                { label: 'Task Response Time', val: 75, color: 'bg-yellow-400', text: 'text-yellow-400' }
+                { label: 'Pending Tasks', val: employeeTasks.filter(t => t.status !== 'completed').length, color: 'bg-yellow-400', text: 'text-yellow-400', isCount: true }
               ].map(stat => (
                 <div key={stat.label} className="bg-supabase-panel border border-supabase-border rounded-2xl p-6 shadow-lg group hover:border-supabase-green/30 transition-all">
                    <div className="flex items-center justify-between mb-6">
                       <span className="text-[10px] font-black uppercase text-supabase-muted tracking-widest leading-none">{stat.label}</span>
-                      <span className={`text-xs font-black ${stat.text}`}>{stat.val}%</span>
+                      <span className={`text-xs font-black ${stat.text}`}>{stat.val}{stat.isCount ? '' : '%'}</span>
                    </div>
-                   <div className="w-full h-1.5 bg-supabase-sidebar rounded-full overflow-hidden mb-2">
-                      <div className={`h-full ${stat.color} transition-all duration-1000`} style={{ width: `${stat.val}%` }}></div>
-                   </div>
-                   <div className="text-[9px] text-supabase-muted font-bold uppercase tracking-tighter italic">Last updated: 3 hours ago</div>
+                   {!stat.isCount ? (
+                     <div className="w-full h-1.5 bg-supabase-sidebar rounded-full overflow-hidden mb-2">
+                        <div className={`h-full ${stat.color} transition-all duration-1000`} style={{ width: `${stat.val}%` }}></div>
+                     </div>
+                   ) : (
+                     <div className="flex items-end gap-2 mb-2">
+                       <div className="text-2xl font-black text-supabase-text leading-none">{stat.val}</div>
+                       <div className="text-[10px] text-supabase-muted font-bold uppercase tracking-tighter mb-0.5">Active Items</div>
+                     </div>
+                   )}
+                   <div className="text-[9px] text-supabase-muted font-bold uppercase tracking-tighter italic">Last updated: Just now</div>
                 </div>
               ))}
+            </div>
+
+            <div className="bg-supabase-panel border border-supabase-border rounded-3xl p-6 sm:p-8 shadow-lg">
+              <h4 className="text-xs font-black uppercase tracking-[0.2em] text-supabase-text mb-6 flex items-center gap-2">
+                <Activity size={16} className="text-supabase-green" /> Personnel Task Registry
+              </h4>
+              
+              {isTasksLoading ? (
+                <div className="flex justify-center py-12">
+                  <Loader2 className="animate-spin text-supabase-green" size={24} />
+                </div>
+              ) : employeeTasks.length === 0 ? (
+                <div className="text-center py-12 border border-dashed border-supabase-border rounded-2xl">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-supabase-muted">No active tasks assigned</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {employeeTasks.map((task) => (
+                    <div key={task.id} className="p-4 bg-supabase-sidebar border border-supabase-border rounded-2xl flex items-center justify-between group hover:border-supabase-green/30 transition-all">
+                      <div className="flex items-center gap-4">
+                        <div className={`w-2 h-2 rounded-full ${
+                          task.status === 'completed' ? 'bg-supabase-green' : 
+                          task.status === 'in-progress' ? 'bg-blue-400 animate-pulse' : 'bg-yellow-500'
+                        }`} />
+                        <div>
+                          <div className="text-xs font-bold text-supabase-text uppercase tracking-tight">{task.title}</div>
+                          <div className="text-[9px] text-supabase-muted uppercase tracking-widest mt-1">
+                            Due: {new Date(task.due_date).toLocaleDateString()} • Priority: {task.priority}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {task.status !== 'completed' && (
+                          <button 
+                            onClick={() => updateTaskStatus(task.id, 'completed')}
+                            className="p-2 bg-supabase-green/10 text-supabase-green hover:bg-supabase-green hover:text-black rounded-lg transition-all"
+                            title="Mark as Completed"
+                          >
+                            <Check size={14} />
+                          </button>
+                        )}
+                        <button 
+                          onClick={() => handleDeleteTask(task.id)}
+                          className="p-2 bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white rounded-lg transition-all"
+                          title="Delete Task"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                        <button className="p-2 bg-supabase-panel border border-supabase-border rounded-lg text-supabase-muted hover:text-supabase-text transition-all">
+                          <ChevronRight size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         );

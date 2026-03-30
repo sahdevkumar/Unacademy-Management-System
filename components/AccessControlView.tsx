@@ -5,7 +5,7 @@ import { supabase } from '../services/supabaseClient';
 import { useToast } from '../context/ToastContext';
 import { useClass } from '../context/ClassContext';
 import { scheduleService } from '../services/scheduleService';
-import { ClassInfo } from '../types';
+import { ClassInfo, Employee } from '../types';
 
 interface SystemUser {
   id: string;
@@ -13,6 +13,7 @@ interface SystemUser {
   email: string;
   role: string;
   mobile: string | null;
+  employee_id: string | null;
 }
 
 const AccessControlView: React.FC = () => {
@@ -21,6 +22,7 @@ const AccessControlView: React.FC = () => {
   const { showToast } = useToast();
   const [activeTab, setActiveTab] = useState<'users' | 'class_control' | 'permissions'>('users');
   const [systemUsers, setSystemUsers] = useState<SystemUser[]>([]);
+  const [employees, setEmployees] = useState<Employee[]>([]);
   const [dbClasses, setDbClasses] = useState<ClassInfo[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -37,11 +39,19 @@ const AccessControlView: React.FC = () => {
       if (supabase) {
         const { data: userData, error: userError } = await supabase
           .from('system_users')
-          .select('id, full_name, email, role, mobile')
+          .select('id, full_name, email, role, mobile, employee_id')
           .order('full_name', { ascending: true });
         
         if (userError) throw userError;
         if (userData) setSystemUsers(userData as SystemUser[]);
+
+        const { data: empData, error: empError } = await supabase
+          .from('employees')
+          .select('*')
+          .order('full_name', { ascending: true });
+        
+        if (empError) throw empError;
+        if (empData) setEmployees(empData as Employee[]);
 
         const { data: assignData } = await supabase.from('user_assignments').select('*');
         if (assignData) {
@@ -78,6 +88,24 @@ const AccessControlView: React.FC = () => {
         showToast(`Role updated to ${newRole}`, 'success');
     } catch (err: any) {
         showToast("Database update failed: " + err.message, "error");
+    }
+  };
+
+  const handleEmployeeMap = async (userId: string, employeeId: string | null) => {
+    try {
+        if (supabase) {
+          const { error } = await supabase
+            .from('system_users')
+            .update({ employee_id: employeeId })
+            .eq('id', userId);
+          
+          if (error) throw error;
+        }
+        
+        setSystemUsers(prev => prev.map(u => u.id === userId ? { ...u, employee_id: employeeId } : u));
+        showToast(`Employee mapping updated`, 'success');
+    } catch (err: any) {
+        showToast("Mapping update failed: " + err.message, "error");
     }
   };
 
@@ -195,7 +223,8 @@ const AccessControlView: React.FC = () => {
              <table className="w-full text-left">
                <thead>
                  <tr className="bg-supabase-sidebar/80 text-[10px] uppercase font-bold text-supabase-muted tracking-[0.2em] border-b border-supabase-border">
-                   <th className="px-6 py-5">Employee</th>
+                   <th className="px-6 py-5">System Account</th>
+                    <th className="px-6 py-5">Mapped Employee</th>
                    <th className="px-6 py-5">Database Role</th>
                    <th className="px-6 py-5 text-center">Status</th>
                    <th className="px-6 py-5 text-right">Actions</th>
@@ -203,9 +232,9 @@ const AccessControlView: React.FC = () => {
                </thead>
                <tbody className="divide-y divide-supabase-border/50">
                  {isLoading && systemUsers.length === 0 ? (
-                   <tr><td colSpan={4} className="px-6 py-20 text-center text-xs text-supabase-muted font-mono tracking-widest animate-pulse">QUERYING SYSTEM_USERS TABLE...</td></tr>
+                   <tr><td colSpan={5} className="px-6 py-20 text-center text-xs text-supabase-muted font-mono tracking-widest animate-pulse">QUERYING SYSTEM_USERS TABLE...</td></tr>
                  ) : filteredUsers.length === 0 ? (
-                   <tr><td colSpan={4} className="px-6 py-20 text-center text-sm text-supabase-muted italic">No records found.</td></tr>
+                   <tr><td colSpan={5} className="px-6 py-20 text-center text-sm text-supabase-muted italic">No records found.</td></tr>
                  ) : filteredUsers.map(u => (
                    <tr key={u.id} className="hover:bg-supabase-hover/20 transition-colors group">
                      <td className="px-6 py-4">
@@ -220,6 +249,25 @@ const AccessControlView: React.FC = () => {
                         </div>
                      </td>
                      <td className="px-6 py-4">
+                        <div className="relative inline-block w-48">
+                            <select 
+                                value={u.employee_id || ''} 
+                                onChange={(e) => handleEmployeeMap(u.id, e.target.value || null)}
+                                className="w-full text-[11px] font-black uppercase py-2 px-3 pr-8 rounded-lg bg-supabase-sidebar border border-supabase-border outline-none focus:border-supabase-green text-supabase-green tracking-widest appearance-none cursor-pointer"
+                            >
+                                <option value="" className="bg-supabase-panel text-supabase-muted">-- Unmapped --</option>
+                                {employees.map(emp => (
+                                    <option key={emp.id} value={emp.id} className="bg-supabase-panel text-supabase-text">
+                                        {emp.full_name} ({emp.job_role})
+                                    </option>
+                                ))}
+                            </select>
+                            <div className="absolute inset-y-0 right-0 flex items-center px-2 pointer-events-none text-supabase-muted">
+                                <ChevronRight size={14} className="rotate-90" />
+                            </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
                         <div className="relative inline-block w-48">
                             <select 
                                 value={u.role.toLowerCase()} 

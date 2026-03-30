@@ -138,30 +138,45 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             const { data: matrixData, error: matrixError } = await fetchWithTimeout(
               supabase.from('system_config').select('value').eq('key', 'permissions_matrix').maybeSingle()
             ) as any;
-            if (matrixError) console.error("Error loading permissions_matrix:", matrixError.message);
+            if (matrixError) {
+              console.error("Error loading permissions_matrix:", matrixError.message);
+              if (matrixError.message === 'Failed to fetch') {
+                console.error("Network error: Check if Supabase URL is correct and reachable.");
+              }
+            }
             if (matrixData?.value) setPermissions(matrixData.value as PermissionMap);
           } catch (e) {
-            console.warn("permissions_matrix fetch timed out or failed");
+            console.warn("permissions_matrix fetch timed out or failed:", e);
           }
 
           try {
             const { data: rolesData, error: rolesError } = await fetchWithTimeout(
               supabase.from('system_config').select('value').eq('key', 'system_roles').maybeSingle()
             ) as any;
-            if (rolesError) console.error("Error loading system_roles:", rolesError.message);
+            if (rolesError) {
+              console.error("Error loading system_roles:", rolesError.message);
+              if (rolesError.message === 'Failed to fetch') {
+                console.error("Network error: Check if Supabase URL is correct and reachable.");
+              }
+            }
             if (rolesData?.value) setAvailableRoles(rolesData.value as UserRole[]);
           } catch (e) {
-            console.warn("system_roles fetch timed out or failed");
+            console.warn("system_roles fetch timed out or failed:", e);
           }
 
           try {
             const { data: deptsData, error: deptsError } = await fetchWithTimeout(
               supabase.from('system_config').select('value').eq('key', 'system_departments').maybeSingle()
             ) as any;
-            if (deptsError) console.error("Error loading system_departments:", deptsError.message);
+            if (deptsError) {
+              console.error("Error loading system_departments:", deptsError.message);
+              if (deptsError.message === 'Failed to fetch') {
+                console.error("Network error: Check if Supabase URL is correct and reachable.");
+              }
+            }
             if (deptsData?.value) setDepartments(deptsData.value as string[]);
           } catch (e) {
-            console.warn("system_departments fetch timed out or failed");
+            console.warn("system_departments fetch timed out or failed:", e);
           }
 
           try {

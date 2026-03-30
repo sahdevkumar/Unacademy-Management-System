@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { memo } from 'react';
 import { BookOpen, Calendar, Clock, MapPin, ChevronRight } from 'lucide-react';
 
 interface TestItem {
@@ -12,7 +12,7 @@ interface TestItem {
   type: 'midterm' | 'final' | 'quiz';
 }
 
-const UpcomingTests: React.FC<{ tests: TestItem[] }> = ({ tests }) => {
+const UpcomingTests = memo(({ tests }: { tests: TestItem[] }) => {
   return (
     <div className="bg-supabase-panel border border-supabase-border rounded-xl p-6 h-full">
       <h3 className="text-sm font-bold text-supabase-muted uppercase tracking-widest mb-6 flex items-center gap-2">
@@ -65,6 +65,8 @@ const UpcomingTests: React.FC<{ tests: TestItem[] }> = ({ tests }) => {
       </div>
     </div>
   );
-};
+});
+
+UpcomingTests.displayName = 'UpcomingTests';
 
 export default UpcomingTests;

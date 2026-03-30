@@ -18,6 +18,10 @@ export const reinitializeSupabase = (url?: string, key?: string) => {
   const finalKey = key?.trim() || windowEnvKey?.trim() || buildEnvKey?.trim();
   
   if (finalUrl && finalKey) {
+    if (!finalUrl.startsWith('http')) {
+      console.warn("Supabase URL must start with http/https. Current URL:", finalUrl);
+      return null;
+    }
     supabase = createClient(finalUrl, finalKey, {
       auth: {
         persistSession: true,

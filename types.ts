@@ -25,7 +25,6 @@ export enum View {
   PAYROLL_BASE_SALARY = 'PAYROLL_BASE_SALARY',
   ABSENT_CALL = 'ABSENT_CALL',
   ABSENT_CALL_LOG = 'ABSENT_CALL_LOG',
-  STUDENT_ATTENDANCE = 'STUDENT_ATTENDANCE',
   ATTENDANCE_DASHBOARD = 'ATTENDANCE_DASHBOARD',
   ENQUIRE_CALL = 'ENQUIRE_CALL',
   ENQUIRE_CALL_LOG = 'ENQUIRE_CALL_LOG',
@@ -37,7 +36,8 @@ export enum View {
   PROFILE = 'PROFILE',
   FEE_COLLECTION = 'FEE_COLLECTION',
   FEE_STRUCTURE = 'FEE_STRUCTURE',
-  BILLING = 'BILLING'
+  BILLING = 'BILLING',
+  PARENTS = 'PARENTS'
 }
 
 export type EducationLevel = 'junior' | 'senior' | 'all';
@@ -97,5 +97,46 @@ export interface Teacher {
   phone?: string;
   profile_photo_url?: string;
   status?: 'active' | 'inactive';
+  created_at?: string;
+}
+
+export interface Employee {
+  id: string;
+  full_name: string;
+  email: string;
+  mobile?: string;
+  job_role: string;
+  department?: string;
+  designation?: string;
+  salary_grade_id?: string;
+  status: string;
+  created_at?: string;
+}
+
+export interface Parent {
+  id: string;
+  full_name: string;
+  email?: string;
+  phone: string;
+  address?: string;
+  occupation?: string;
+  status?: 'active' | 'inactive';
+  created_at?: string;
+}
+
+export interface Student {
+  id: string;
+  full_name: string;
+  roll_number?: string;
+  class_name: string;
+  parent_id?: string;
+  guardian_name?: string;
+  contact_number?: string;
+  email?: string;
+  address?: string;
+  date_of_birth?: string;
+  gender?: string;
+  status?: 'active' | 'inactive';
+  profile_photo_url?: string;
   created_at?: string;
 }

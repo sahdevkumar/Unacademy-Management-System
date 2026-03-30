@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { memo } from 'react';
 import { Activity, Clock, User, CheckCircle2, AlertCircle } from 'lucide-react';
 
 interface ActivityItem {
@@ -11,7 +11,7 @@ interface ActivityItem {
   status: 'success' | 'warning' | 'info';
 }
 
-const RecentActivity: React.FC<{ activities: ActivityItem[] }> = ({ activities }) => {
+const RecentActivity = memo(({ activities }: { activities: ActivityItem[] }) => {
   return (
     <div className="bg-supabase-panel border border-supabase-border rounded-xl p-6 h-full">
       <h3 className="text-sm font-bold text-supabase-muted uppercase tracking-widest mb-6 flex items-center gap-2">
@@ -48,6 +48,8 @@ const RecentActivity: React.FC<{ activities: ActivityItem[] }> = ({ activities }
       </div>
     </div>
   );
-};
+});
+
+RecentActivity.displayName = 'RecentActivity';
 
 export default RecentActivity;

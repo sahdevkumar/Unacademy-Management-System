@@ -46,7 +46,6 @@ const Header: React.FC<HeaderProps> = ({ currentView, onChangeView, onMenuToggle
       case View.ACCESS_CONTROL: return 'Access Control';
       case View.EMPLOYEES: return 'Employees';
       case View.ABSENT_CALL: return 'Absent Call';
-      case View.STUDENT_ATTENDANCE: return 'Student Attendance';
       case View.STUDENTS: return "Student's";
       case View.REGISTRATION: return 'Registration';
       case View.ADMISSION: return 'Admission';

@@ -4,28 +4,13 @@ import { Users, Search, Filter, Plus, Loader2, Mail, Phone, User, GraduationCap,
 import { supabase } from '../services/supabaseClient';
 import { scheduleService } from '../services/scheduleService';
 import { useToast } from '../context/ToastContext';
-import { ClassInfo } from '../types';
-
-interface Student {
-  id: string;
-  full_name: string;
-  roll_number?: string;
-  class_name: string;
-  guardian_name?: string;
-  contact_number?: string;
-  email?: string;
-  address?: string;
-  date_of_birth?: string;
-  gender?: string;
-  status?: 'active' | 'inactive';
-  profile_photo_url?: string;
-  created_at?: string;
-}
+import { ClassInfo, Student, Parent } from '../types';
 
 const StudentsView: React.FC = () => {
   const { showToast } = useToast();
   const [students, setStudents] = useState<Student[]>([]);
   const [classes, setClasses] = useState<ClassInfo[]>([]);
+  const [parents, setParents] = useState<Parent[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -33,14 +18,19 @@ const StudentsView: React.FC = () => {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   
+  // Parent Search State
+  const [searchTermParent, setSearchTermParent] = useState('');
+  const [showAddParentForm, setShowAddParentForm] = useState(false);
+  const [newParent, setNewParent] = useState<Partial<Parent>>({ full_name: '', phone: '', status: 'active' });
+
   // Attendance History State
   const [isAttendanceHistoryOpen, setIsAttendanceHistoryOpen] = useState(false);
   const [attendanceLogs, setAttendanceLogs] = useState<any[]>([]);
   const [isAttendanceLoading, setIsAttendanceLoading] = useState(false);
 
-  // Edit Modal State
+  // Edit/Add Modal State
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [editingStudent, setEditingStudent] = useState<Student | null>(null);
+  const [editingStudent, setEditingStudent] = useState<Partial<Student> | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
   // Delete Confirmation State
@@ -57,6 +47,8 @@ const StudentsView: React.FC = () => {
 
         // Fetch students
         await fetchStudents();
+        // Fetch parents
+        await fetchParents();
       } catch (error: any) {
         showToast("Initialization failed: " + error.message, "error");
       } finally {
@@ -86,8 +78,22 @@ const StudentsView: React.FC = () => {
     }
   };
 
+  const fetchParents = async () => {
+    if (!supabase) return;
+    try {
+      const { data, error } = await supabase.from('parents').select('*').order('full_name', { ascending: true });
+      if (error) throw error;
+      setParents(data || []);
+    } catch (error: any) {
+      console.error("Failed to fetch parents:", error.message);
+    }
+  };
+
   const handleEdit = (student: Student) => {
     setEditingStudent({ ...student });
+    const parent = parents.find(p => p.id === student.parent_id);
+    setSearchTermParent(parent ? parent.full_name : '');
+    setShowAddParentForm(false);
     setIsEditModalOpen(true);
   };
 
@@ -117,30 +123,61 @@ const StudentsView: React.FC = () => {
 
     setIsSaving(true);
     try {
-      const { error } = await supabase
-        .from('students')
-        .update({
-          full_name: editingStudent.full_name,
-          roll_number: editingStudent.roll_number,
-          class_name: editingStudent.class_name,
-          guardian_name: editingStudent.guardian_name,
-          contact_number: editingStudent.contact_number,
-          email: editingStudent.email,
-          address: editingStudent.address,
-          date_of_birth: editingStudent.date_of_birth,
-          gender: editingStudent.gender,
-          status: editingStudent.status,
-          profile_photo_url: editingStudent.profile_photo_url
-        })
-        .eq('id', editingStudent.id);
+      let finalParentId = editingStudent.parent_id;
+      let finalGuardianName = editingStudent.guardian_name;
+      let finalContactNumber = editingStudent.contact_number;
 
-      if (error) throw error;
+      // If adding a new parent
+      if (showAddParentForm && newParent.full_name && newParent.phone) {
+        const { data: parentData, error: parentError } = await supabase
+          .from('parents')
+          .insert({
+            full_name: newParent.full_name,
+            phone: newParent.phone,
+            email: newParent.email,
+            address: newParent.address,
+            occupation: newParent.occupation,
+            status: 'active'
+          })
+          .select()
+          .single();
 
-      showToast("Student profile updated successfully", "success");
+        if (parentError) throw parentError;
+        finalParentId = parentData.id;
+        finalGuardianName = newParent.full_name;
+        finalContactNumber = newParent.phone;
+        await fetchParents(); // Refresh parents list
+      }
+
+      const studentData = {
+        full_name: editingStudent.full_name,
+        roll_number: editingStudent.roll_number,
+        class_name: editingStudent.class_name,
+        parent_id: finalParentId,
+        guardian_name: finalGuardianName,
+        contact_number: finalContactNumber,
+        email: editingStudent.email,
+        address: editingStudent.address,
+        date_of_birth: editingStudent.date_of_birth,
+        gender: editingStudent.gender,
+        status: editingStudent.status,
+        profile_photo_url: editingStudent.profile_photo_url
+      };
+
+      if (editingStudent.id) {
+        // Update
+        const { error } = await supabase
+          .from('students')
+          .update(studentData)
+          .eq('id', editingStudent.id);
+        if (error) throw error;
+        showToast("Student profile updated successfully", "success");
+      }
+
       setIsEditModalOpen(false);
       await fetchStudents();
     } catch (error: any) {
-      showToast("Update failed: " + error.message, "error");
+      showToast("Save failed: " + error.message, "error");
     } finally {
       setIsSaving(false);
     }
@@ -500,7 +537,7 @@ const StudentsView: React.FC = () => {
                           referrerPolicy="no-referrer"
                         />
                       ) : (
-                        editingStudent.full_name.charAt(0)
+                        editingStudent.full_name?.charAt(0) || 'S'
                       )}
                     </div>
                     <label className="absolute inset-0 flex items-center justify-center bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer rounded-3xl">
@@ -529,7 +566,7 @@ const StudentsView: React.FC = () => {
                     <input 
                       type="text"
                       className="w-full bg-supabase-bg border border-supabase-border rounded-xl px-4 py-2.5 text-sm text-supabase-text focus:outline-none focus:border-supabase-green transition-all"
-                      value={editingStudent.full_name}
+                      value={editingStudent.full_name || ''}
                       onChange={(e) => setEditingStudent({...editingStudent, full_name: e.target.value})}
                       required
                     />
@@ -551,6 +588,7 @@ const StudentsView: React.FC = () => {
                       onChange={(e) => setEditingStudent({...editingStudent, class_name: e.target.value})}
                       required
                     >
+                      <option value="" disabled>Select Class</option>
                       {classes.map(cls => (
                         <option key={cls.id} value={cls.name}>{cls.name}</option>
                       ))}
@@ -567,8 +605,116 @@ const StudentsView: React.FC = () => {
                       <option value="inactive">Inactive</option>
                     </select>
                   </div>
+
+                  {/* Parent Selection Section */}
+                  <div className="md:col-span-2 space-y-4 pt-4 border-t border-supabase-border">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[10px] font-black text-supabase-muted uppercase tracking-widest">Parent / Guardian Information</label>
+                      <button 
+                        type="button"
+                        onClick={() => setShowAddParentForm(!showAddParentForm)}
+                        className="text-[10px] font-black text-supabase-green uppercase tracking-widest hover:underline"
+                      >
+                        {showAddParentForm ? 'Search Existing Parent' : 'Add New Parent'}
+                      </button>
+                    </div>
+
+                    {!showAddParentForm ? (
+                      <div className="space-y-2 relative">
+                        <div className="relative">
+                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-supabase-muted" size={16} />
+                          <input 
+                            type="text"
+                            placeholder="Search existing parents by name or phone..."
+                            className="w-full bg-supabase-bg border border-supabase-border rounded-xl py-2.5 pl-10 pr-4 text-sm text-supabase-text focus:outline-none focus:border-supabase-green transition-all"
+                            value={searchTermParent}
+                            onChange={(e) => setSearchTermParent(e.target.value)}
+                          />
+                        </div>
+                        
+                        {searchTermParent && (
+                          <div className="absolute z-20 w-full mt-1 bg-supabase-panel border border-supabase-border rounded-xl shadow-2xl max-h-48 overflow-y-auto scrollbar-hide">
+                            {parents
+                              .filter(p => 
+                                p.full_name.toLowerCase().includes(searchTermParent.toLowerCase()) || 
+                                p.phone.includes(searchTermParent)
+                              )
+                              .map(parent => (
+                                <button
+                                  key={parent.id}
+                                  type="button"
+                                  onClick={() => {
+                                    setEditingStudent({
+                                      ...editingStudent, 
+                                      parent_id: parent.id,
+                                      guardian_name: parent.full_name,
+                                      contact_number: parent.phone
+                                    });
+                                    setSearchTermParent(parent.full_name);
+                                  }}
+                                  className="w-full text-left px-4 py-3 hover:bg-supabase-hover transition-all border-b border-supabase-border last:border-0"
+                                >
+                                  <div className="text-sm font-bold text-supabase-text">{parent.full_name}</div>
+                                  <div className="text-[10px] text-supabase-muted uppercase tracking-widest">{parent.phone} • {parent.occupation || 'Parent'}</div>
+                                </button>
+                              ))
+                            }
+                            {parents.filter(p => 
+                                p.full_name.toLowerCase().includes(searchTermParent.toLowerCase()) || 
+                                p.phone.includes(searchTermParent)
+                              ).length === 0 && (
+                                <div className="px-4 py-3 text-sm text-supabase-muted italic">No parents found. Click "Add New Parent" above.</div>
+                              )
+                            }
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-supabase-bg/20 p-4 rounded-2xl border border-supabase-border">
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-supabase-muted uppercase tracking-widest">Parent Full Name</label>
+                          <input 
+                            type="text"
+                            className="w-full bg-supabase-bg border border-supabase-border rounded-xl px-4 py-2.5 text-sm text-supabase-text focus:outline-none focus:border-supabase-green transition-all"
+                            value={newParent.full_name || ''}
+                            onChange={(e) => setNewParent({...newParent, full_name: e.target.value})}
+                            required={showAddParentForm}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-supabase-muted uppercase tracking-widest">Parent Phone</label>
+                          <input 
+                            type="text"
+                            className="w-full bg-supabase-bg border border-supabase-border rounded-xl px-4 py-2.5 text-sm text-supabase-text focus:outline-none focus:border-supabase-green transition-all"
+                            value={newParent.phone || ''}
+                            onChange={(e) => setNewParent({...newParent, phone: e.target.value})}
+                            required={showAddParentForm}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-supabase-muted uppercase tracking-widest">Parent Email</label>
+                          <input 
+                            type="email"
+                            className="w-full bg-supabase-bg border border-supabase-border rounded-xl px-4 py-2.5 text-sm text-supabase-text focus:outline-none focus:border-supabase-green transition-all"
+                            value={newParent.email || ''}
+                            onChange={(e) => setNewParent({...newParent, email: e.target.value})}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-supabase-muted uppercase tracking-widest">Parent Occupation</label>
+                          <input 
+                            type="text"
+                            className="w-full bg-supabase-bg border border-supabase-border rounded-xl px-4 py-2.5 text-sm text-supabase-text focus:outline-none focus:border-supabase-green transition-all"
+                            value={newParent.occupation || ''}
+                            onChange={(e) => setNewParent({...newParent, occupation: e.target.value})}
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
                   <div className="space-y-2">
-                    <label className="text-[10px] font-black text-supabase-muted uppercase tracking-widest">Guardian Name</label>
+                    <label className="text-[10px] font-black text-supabase-muted uppercase tracking-widest">Guardian Name (Display)</label>
                     <input 
                       type="text"
                       className="w-full bg-supabase-bg border border-supabase-border rounded-xl px-4 py-2.5 text-sm text-supabase-text focus:outline-none focus:border-supabase-green transition-all"
@@ -577,7 +723,7 @@ const StudentsView: React.FC = () => {
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-[10px] font-black text-supabase-muted uppercase tracking-widest">Contact Number</label>
+                    <label className="text-[10px] font-black text-supabase-muted uppercase tracking-widest">Contact Number (Display)</label>
                     <input 
                       type="text"
                       className="w-full bg-supabase-bg border border-supabase-border rounded-xl px-4 py-2.5 text-sm text-supabase-text focus:outline-none focus:border-supabase-green transition-all"
@@ -586,7 +732,7 @@ const StudentsView: React.FC = () => {
                     />
                   </div>
                   <div className="space-y-2 md:col-span-2">
-                    <label className="text-[10px] font-black text-supabase-muted uppercase tracking-widest">Email Address</label>
+                    <label className="text-[10px] font-black text-supabase-muted uppercase tracking-widest">Student Email Address</label>
                     <input 
                       type="email"
                       className="w-full bg-supabase-bg border border-supabase-border rounded-xl px-4 py-2.5 text-sm text-supabase-text focus:outline-none focus:border-supabase-green transition-all"
@@ -683,10 +829,6 @@ const StudentsView: React.FC = () => {
               title={viewMode === 'grid' ? 'Switch to List View' : 'Switch to Grid View'}
             >
               <Filter size={20} />
-            </button>
-            <button className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-supabase-green text-black px-4 py-2 rounded-lg font-bold text-sm hover:bg-supabase-greenHover transition-all shadow-lg shadow-supabase-green/20">
-              <Plus size={18} />
-              <span>Add Student</span>
             </button>
           </div>
         </div>

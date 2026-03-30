@@ -71,7 +71,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, isOpen = f
   // Group views
   const scheduleViews = [View.CLASS_SCHEDULE, View.TABLE_EDITOR, View.LIVE_SCHEDULE];
   const teacherViews = [View.TEACHER_TASKS, View.TODAY_TASK];
-  const academicViews = [View.STUDENTS, View.STUDENT_ATTENDANCE, View.REGISTRATION, View.ADMISSION];
+  const academicViews = [View.STUDENTS, View.REGISTRATION, View.ADMISSION, View.PARENTS];
   const payrollViews = [View.PAYROLL, View.PAYROLL_SETUP, View.PAYROLL_BASE_SALARY, View.PAYROLL_DEDUCTIONS];
   const financeViews = [View.FEE_COLLECTION, View.FEE_STRUCTURE, View.BILLING];
   
@@ -166,57 +166,8 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, isOpen = f
           
           {renderNavItem(View.DASHBOARD, 'Dashboard', <LayoutDashboard size={18} />, 'VIEW_DASHBOARD')}
           {renderNavItem(View.ENQUIRE_CALL, 'Enquire Call', <MessageSquarePlus size={18} />, 'VIEW_TEACHER_TASKS')}
-          {renderNavItem(View.STUDENT_ATTENDANCE, 'Student Attendance', <UserCheck size={18} />, 'VIEW_TEACHER_TASKS')}
           {renderNavItem(View.ABSENT_CALL, 'Absent Call', <PhoneCall size={18} />, 'VIEW_TEACHER_TASKS')}
 
-          <div className="mt-6 mb-2 text-xs font-semibold text-supabase-muted uppercase tracking-wider px-3 pb-2">
-            Academic
-          </div>
-          
-          <div className="mb-1">
-            <button 
-              onClick={() => {
-                const newState = !isAcademicExpanded;
-                setIsAcademicExpanded(newState);
-                if (newState) {
-                  setIsScheduleExpanded(false);
-                  setIsTeacherExpanded(false);
-                  setIsPayrollExpanded(false);
-                }
-              }}
-              className={`w-full flex items-center justify-between px-3 py-2 rounded-md transition-colors text-sm font-medium 
-                ${academicViews.includes(currentView) ? 'text-supabase-text' : 'text-supabase-muted hover:text-supabase-text hover:bg-supabase-hover'}`}
-            >
-              <div className="flex items-center gap-3">
-                <BookOpen size={18} className={academicViews.includes(currentView) ? 'text-supabase-green' : ''} />
-                <span>Academic</span>
-              </div>
-              <motion.div
-                animate={{ rotate: isAcademicExpanded ? 180 : 0 }}
-                transition={{ duration: 0.2 }}
-              >
-                <ChevronDown size={14} />
-              </motion.div>
-            </button>
-            
-            <AnimatePresence>
-              {isAcademicExpanded && (
-                <motion.div 
-                  initial={{ height: 0, opacity: 0 }}
-                  animate={{ height: 'auto', opacity: 1 }}
-                  exit={{ height: 0, opacity: 0 }}
-                  transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
-                  className="mt-1 space-y-0.5 overflow-hidden"
-                >
-                  {renderNavItem(View.STUDENTS, "Student's", <Users size={18} />, 'VIEW_ACADEMIC', true)}
-                  {renderNavItem(View.STUDENT_ATTENDANCE, 'Attendance', <UserCheck size={18} />, 'VIEW_ACADEMIC', true)}
-                  {renderNavItem(View.REGISTRATION, 'Registration', <ClipboardList size={18} />, 'VIEW_ACADEMIC', true)}
-                  {renderNavItem(View.ADMISSION, 'Admission', <UserPlus size={18} />, 'VIEW_ACADEMIC', true)}
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-          
           {/* Grouped Schedule Menu */}
           <div className="mb-1">
             <button 
@@ -311,10 +262,53 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, isOpen = f
           {renderNavItem(View.ATTENDANCE_DASHBOARD, 'Attendance Stats', <BarChart3 size={18} />, 'VIEW_REPORTS')}
           {renderNavItem(View.ENQUIRE_CALL_LOG, 'Enquiry Call Log', <History size={18} />, 'VIEW_REPORTS')}
           {renderNavItem(View.ABSENT_CALL_LOG, 'Absent Call Log', <ClipboardList size={18} />, 'VIEW_REPORTS')}
-          {renderNavItem(View.WORK_PROGRESS, 'Work Progress', <Activity size={18} />, 'VIEW_REPORTS')}
 
           <div className="mt-6 mb-2 text-xs font-semibold text-supabase-muted uppercase tracking-wider px-3 pb-2">
             Management
+          </div>
+          
+          <div className="mb-1">
+            <button 
+              onClick={() => {
+                const newState = !isAcademicExpanded;
+                setIsAcademicExpanded(newState);
+                if (newState) {
+                  setIsScheduleExpanded(false);
+                  setIsTeacherExpanded(false);
+                  setIsPayrollExpanded(false);
+                }
+              }}
+              className={`w-full flex items-center justify-between px-3 py-2 rounded-md transition-colors text-sm font-medium 
+                ${academicViews.includes(currentView) ? 'text-supabase-text' : 'text-supabase-muted hover:text-supabase-text hover:bg-supabase-hover'}`}
+            >
+              <div className="flex items-center gap-3">
+                <BookOpen size={18} className={academicViews.includes(currentView) ? 'text-supabase-green' : ''} />
+                <span>Academic</span>
+              </div>
+              <motion.div
+                animate={{ rotate: isAcademicExpanded ? 180 : 0 }}
+                transition={{ duration: 0.2 }}
+              >
+                <ChevronDown size={14} />
+              </motion.div>
+            </button>
+            
+            <AnimatePresence>
+              {isAcademicExpanded && (
+                <motion.div 
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: 'auto', opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
+                  className="mt-1 space-y-0.5 overflow-hidden"
+                >
+                  {renderNavItem(View.STUDENTS, "Student's", <Users size={18} />, 'VIEW_ACADEMIC', true)}
+                  {renderNavItem(View.PARENTS, "Parent's", <Users size={18} />, 'VIEW_ACADEMIC', true)}
+                  {renderNavItem(View.REGISTRATION, 'Registration', <ClipboardList size={18} />, 'VIEW_ACADEMIC', true)}
+                  {renderNavItem(View.ADMISSION, 'Admission', <UserPlus size={18} />, 'VIEW_ACADEMIC', true)}
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
           
           {renderNavItem(View.TEACHERS, 'Teachers List', <GraduationCap size={18} />, 'MANAGE_TEACHERS')}

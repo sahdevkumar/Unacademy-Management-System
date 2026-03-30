@@ -1,45 +1,56 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, lazy, Suspense } from 'react';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
-import DashboardView from './components/DashboardView';
-import TableEditor from './components/TableEditor';
-import ClassSchedule from './components/ClassSchedule';
-import TeachersView from './components/TeachersView';
-import EmployeesView from './components/EmployeesView';
-import TeacherTaskView from './components/TeacherTaskView';
-import TodayTaskView from './components/TodayTaskView';
-import MyTaskView from './components/MyTaskView';
-import LiveScheduleView from './components/LiveScheduleView';
-import AccessControlView from './components/AccessControlView';
-import SettingsView from './components/SettingsView';
-import PayrollView from './components/PayrollView';
-import DeductionManagement from './components/DeductionManagement';
-import SalarySetup from './components/SalarySetup';
-import BaseSalaryRegistry from './components/BaseSalaryRegistry';
-import AbsentCallView from './components/AbsentCallView';
-import AbsentCallLogView from './components/AbsentCallLogView';
-import StudentAttendanceView from './components/StudentAttendanceView';
-import AttendanceDashboardView from './components/AttendanceDashboardView';
-import EnquiryCallView from './components/EnquiryCallView';
-import EnquiryCallLogView from './components/EnquiryCallLogView';
-import TaskManagementView from './components/TaskManagementView';
-import StudentsView from './components/StudentsView';
-import RegistrationView from './components/RegistrationView';
-import AdmissionView from './components/AdmissionView';
-import StudentFeedbackView from './components/StudentFeedbackView';
-import ProfileView from './components/ProfileView';
-import FeeCollectionView from './components/FeeCollectionView';
-import FeeStructureView from './components/FeeStructureView';
-import BillingView from './components/BillingView';
-import LoginView from './components/LoginView';
 import { View } from './types';
-import { BookOpen, CreditCard, Book, Activity, WifiOff } from 'lucide-react';
+import { BookOpen, CreditCard, Book, Activity, WifiOff, Loader2 } from 'lucide-react';
 import { ThemeProvider } from './context/ThemeContext';
 import { ClassProvider } from './context/ClassContext';
 import { ToastProvider } from './context/ToastContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { supabase, reinitializeSupabase } from './services/supabaseClient';
+
+// Lazy load views for better performance
+const DashboardView = lazy(() => import('./components/DashboardView'));
+const TableEditor = lazy(() => import('./components/TableEditor'));
+const ClassSchedule = lazy(() => import('./components/ClassSchedule'));
+const TeachersView = lazy(() => import('./components/TeachersView'));
+const EmployeesView = lazy(() => import('./components/EmployeesView'));
+const TeacherTaskView = lazy(() => import('./components/TeacherTaskView'));
+const TodayTaskView = lazy(() => import('./components/TodayTaskView'));
+const MyTaskView = lazy(() => import('./components/MyTaskView'));
+const LiveScheduleView = lazy(() => import('./components/LiveScheduleView'));
+const AccessControlView = lazy(() => import('./components/AccessControlView'));
+const SettingsView = lazy(() => import('./components/SettingsView'));
+const PayrollView = lazy(() => import('./components/PayrollView'));
+const DeductionManagement = lazy(() => import('./components/DeductionManagement'));
+const SalarySetup = lazy(() => import('./components/SalarySetup'));
+const BaseSalaryRegistry = lazy(() => import('./components/BaseSalaryRegistry'));
+const AbsentCallView = lazy(() => import('./components/AbsentCallView'));
+const AbsentCallLogView = lazy(() => import('./components/AbsentCallLogView'));
+const AttendanceDashboardView = lazy(() => import('./components/AttendanceDashboardView'));
+const EnquiryCallView = lazy(() => import('./components/EnquiryCallView'));
+const EnquiryCallLogView = lazy(() => import('./components/EnquiryCallLogView'));
+const TaskManagementView = lazy(() => import('./components/TaskManagementView'));
+const StudentsView = lazy(() => import('./components/StudentsView'));
+const RegistrationView = lazy(() => import('./components/RegistrationView'));
+const AdmissionView = lazy(() => import('./components/AdmissionView'));
+const ParentsView = lazy(() => import('./components/ParentsView'));
+const StudentFeedbackView = lazy(() => import('./components/StudentFeedbackView'));
+const ProfileView = lazy(() => import('./components/ProfileView'));
+const FeeCollectionView = lazy(() => import('./components/FeeCollectionView'));
+const FeeStructureView = lazy(() => import('./components/FeeStructureView'));
+const BillingView = lazy(() => import('./components/BillingView'));
+const LoginView = lazy(() => import('./components/LoginView'));
+
+const ViewLoader = () => (
+  <div className="flex-1 flex items-center justify-center min-h-[400px]">
+    <div className="flex flex-col items-center gap-3">
+      <Loader2 className="animate-spin text-supabase-green" size={32} />
+      <span className="text-[10px] font-bold text-supabase-muted uppercase tracking-[0.2em]">Initializing Module...</span>
+    </div>
+  </div>
+);
 
 const MainLayout: React.FC<{ 
   currentView: View, 
@@ -68,43 +79,53 @@ const MainLayout: React.FC<{
   }
 
   if (!isAuthenticated) {
-    return <LoginView />;
+    return (
+      <Suspense fallback={<div className="h-screen bg-supabase-bg" />}>
+        <LoginView />
+      </Suspense>
+    );
   }
 
   const renderView = () => {
-    switch (currentView) {
-      case View.DASHBOARD: return <DashboardView />;
-      case View.TABLE_EDITOR: return <TableEditor />;
-      case View.CLASS_SCHEDULE: return <ClassSchedule />;
-      case View.TEACHERS: return <TeachersView />;
-      case View.EMPLOYEES: return <EmployeesView />;
-      case View.TEACHER_TASKS: return <TeacherTaskView />;
-      case View.TODAY_TASK: return <TodayTaskView />;
-      case View.MY_TASK: return <MyTaskView />;
-      case View.LIVE_SCHEDULE: return <LiveScheduleView />;
-      case View.ACCESS_CONTROL: return <AccessControlView />;
-      case View.SETTINGS: return <SettingsView />;
-      case View.PAYROLL: return <PayrollView />;
-      case View.PAYROLL_DEDUCTIONS: return <DeductionManagement />;
-      case View.PAYROLL_SETUP: return <SalarySetup />;
-      case View.PAYROLL_BASE_SALARY: return <BaseSalaryRegistry />;
-      case View.ABSENT_CALL: return <AbsentCallView />;
-      case View.ABSENT_CALL_LOG: return <AbsentCallLogView />;
-      case View.STUDENT_ATTENDANCE: return <StudentAttendanceView />;
-      case View.ATTENDANCE_DASHBOARD: return <AttendanceDashboardView />;
-      case View.ENQUIRE_CALL: return <EnquiryCallView />;
-      case View.ENQUIRE_CALL_LOG: return <EnquiryCallLogView />;
-      case View.TASK_MANAGEMENT: return <TaskManagementView />;
-      case View.STUDENTS: return <StudentsView />;
-      case View.REGISTRATION: return <RegistrationView />;
-      case View.ADMISSION: return <AdmissionView />;
-      case View.STUDENT_FEEDBACK: return <StudentFeedbackView />;
-      case View.PROFILE: return <ProfileView />;
-      case View.FEE_COLLECTION: return <FeeCollectionView />;
-      case View.FEE_STRUCTURE: return <FeeStructureView />;
-      case View.BILLING: return <BillingView />;
-      default: return <DashboardView />;
-    }
+    return (
+      <Suspense fallback={<ViewLoader />}>
+        {(() => {
+          switch (currentView) {
+            case View.DASHBOARD: return <DashboardView />;
+            case View.TABLE_EDITOR: return <TableEditor />;
+            case View.CLASS_SCHEDULE: return <ClassSchedule />;
+            case View.TEACHERS: return <TeachersView />;
+            case View.EMPLOYEES: return <EmployeesView />;
+            case View.TEACHER_TASKS: return <TeacherTaskView />;
+            case View.TODAY_TASK: return <TodayTaskView />;
+            case View.MY_TASK: return <MyTaskView />;
+            case View.LIVE_SCHEDULE: return <LiveScheduleView />;
+            case View.ACCESS_CONTROL: return <AccessControlView />;
+            case View.SETTINGS: return <SettingsView />;
+            case View.PAYROLL: return <PayrollView />;
+            case View.PAYROLL_DEDUCTIONS: return <DeductionManagement />;
+            case View.PAYROLL_SETUP: return <SalarySetup />;
+            case View.PAYROLL_BASE_SALARY: return <BaseSalaryRegistry />;
+            case View.ABSENT_CALL: return <AbsentCallView />;
+            case View.ABSENT_CALL_LOG: return <AbsentCallLogView />;
+            case View.ATTENDANCE_DASHBOARD: return <AttendanceDashboardView />;
+            case View.ENQUIRE_CALL: return <EnquiryCallView />;
+            case View.ENQUIRE_CALL_LOG: return <EnquiryCallLogView />;
+            case View.TASK_MANAGEMENT: return <TaskManagementView />;
+            case View.STUDENTS: return <StudentsView />;
+            case View.REGISTRATION: return <RegistrationView />;
+            case View.ADMISSION: return <AdmissionView />;
+            case View.PARENTS: return <ParentsView />;
+            case View.STUDENT_FEEDBACK: return <StudentFeedbackView />;
+            case View.PROFILE: return <ProfileView />;
+            case View.FEE_COLLECTION: return <FeeCollectionView />;
+            case View.FEE_STRUCTURE: return <FeeStructureView />;
+            case View.BILLING: return <BillingView />;
+            default: return <DashboardView />;
+          }
+        })()}
+      </Suspense>
+    );
   };
 
   return (
@@ -346,23 +367,6 @@ const AppContent: React.FC = () => {
     </AuthProvider>
   );
 };
-
-const Loader2 = ({ className, size }: { className?: string, size?: number }) => (
-  <svg 
-    xmlns="http://www.w3.org/2000/svg" 
-    width={size || 24} 
-    height={size || 24} 
-    viewBox="0 0 24 24" 
-    fill="none" 
-    stroke="currentColor" 
-    strokeWidth="2" 
-    strokeLinecap="round" 
-    strokeLinejoin="round" 
-    className={className}
-  >
-    <path d="M21 12a9 9 0 1 1-6.219-8.56" />
-  </svg>
-);
 
 const AlertTriangle = ({ className, size }: { className?: string, size?: number }) => (
   <svg 

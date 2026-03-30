@@ -1,103 +1,104 @@
 
-import React from 'react';
-import { Users, UserCheck, UserX, UserMinus, GraduationCap, Baby, UserCircle2 } from 'lucide-react';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
+import React, { memo } from 'react';
+import { Users, UserCheck, UserX, UserMinus, GraduationCap, Baby, UserCircle2, TrendingUp } from 'lucide-react';
+import { motion } from 'motion/react';
 
-interface ReportCardProps {
-  title: string;
-  stats: { label: string; value: number; icon: React.ReactNode; color: string }[];
-  chartData: { name: string; value: number; color: string }[];
+interface MiniStatProps {
+  label: string;
+  value: number;
+  icon: React.ReactNode;
+  color: string;
+  delay?: number;
 }
 
-const ReportCard: React.FC<ReportCardProps> = ({ title, stats, chartData }) => (
-  <div className="bg-supabase-panel border border-supabase-border rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow">
-    <h3 className="text-sm font-bold text-supabase-muted uppercase tracking-widest mb-6 flex items-center gap-2">
-      <div className="w-1 h-4 bg-supabase-green rounded-full"></div>
-      {title}
-    </h3>
-    
-    <div className="grid grid-cols-2 gap-4 mb-6">
-      {stats.map((stat, i) => (
-        <div key={i} className="flex items-center gap-3 p-3 rounded-lg bg-supabase-bg border border-supabase-border/50">
-          <div className={`p-2 rounded-md ${stat.color} bg-opacity-10`}>
-            {React.isValidElement(stat.icon) && React.cloneElement(stat.icon as React.ReactElement<any>, { size: 18, className: stat.color.replace('bg-', 'text-') })}
-          </div>
-          <div>
-            <div className="text-lg font-bold text-supabase-text">{stat.value}</div>
-            <div className="text-[10px] text-supabase-muted uppercase font-bold tracking-tight">{stat.label}</div>
-          </div>
-        </div>
-      ))}
+const MiniStat = memo(({ label, value, icon, color, delay = 0 }: MiniStatProps) => (
+  <motion.div 
+    initial={{ opacity: 0, x: -10 }}
+    animate={{ opacity: 1, x: 0 }}
+    transition={{ delay, duration: 0.3 }}
+    className="flex items-center gap-3 p-2 rounded-lg hover:bg-supabase-hover transition-colors group"
+  >
+    <div className={`p-2 rounded-md ${color} bg-opacity-10 group-hover:bg-opacity-20 transition-all`}>
+      {React.isValidElement(icon) && React.cloneElement(icon as React.ReactElement<any>, { size: 14, className: color.replace('bg-', 'text-') })}
     </div>
-
-    <div className="h-48 w-full">
-      <ResponsiveContainer width="100%" height="100%">
-        <PieChart>
-          <Pie
-            data={chartData}
-            innerRadius={60}
-            outerRadius={80}
-            paddingAngle={5}
-            dataKey="value"
-          >
-            {chartData.map((entry, index) => (
-              <Cell key={`cell-${index}`} fill={entry.color} />
-            ))}
-          </Pie>
-          <Tooltip 
-            contentStyle={{ backgroundColor: '#1c1c1c', border: '1px solid #2e2e2e', borderRadius: '8px' }}
-            itemStyle={{ color: '#fff', fontSize: '12px' }}
-          />
-        </PieChart>
-      </ResponsiveContainer>
+    <div className="min-w-0">
+      <div className="text-sm font-black text-supabase-text tracking-tight leading-none mb-1">{value}</div>
+      <div className="text-[9px] text-supabase-muted uppercase font-bold tracking-widest truncate">{label}</div>
     </div>
-  </div>
-);
+  </motion.div>
+));
 
-const DashboardReports: React.FC<{ 
+MiniStat.displayName = 'MiniStat';
+
+const DashboardReports = memo(({ employeeStats, studentStats }: { 
   employeeStats: { total: number; present: number; absent: number; onLeave: number };
   studentStats: { total: number; present: number; absent: number; boys: number; girls: number };
-}> = ({ employeeStats, studentStats }) => {
-  const empChartData = [
-    { name: 'Present', value: employeeStats.present, color: '#3ecf8e' },
-    { name: 'Absent', value: employeeStats.absent, color: '#f87171' },
-    { name: 'On Leave', value: employeeStats.onLeave, color: '#fbbf24' },
-  ];
-
-  const studentChartData = [
-    { name: 'Present', value: studentStats.present, color: '#3ecf8e' },
-    { name: 'Absent', value: studentStats.absent, color: '#f87171' },
-  ];
-
-  const genderChartData = [
-    { name: 'Boys', value: studentStats.boys, color: '#60a5fa' },
-    { name: 'Girls', value: studentStats.girls, color: '#f472b6' },
-  ];
-
+}) => {
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-      <ReportCard 
-        title="Employees Report"
-        stats={[
-          { label: 'Total', value: employeeStats.total, icon: <Users />, color: 'bg-blue-500' },
-          { label: 'Present', value: employeeStats.present, icon: <UserCheck />, color: 'bg-supabase-green' },
-          { label: 'Absent', value: employeeStats.absent, icon: <UserX />, color: 'bg-red-500' },
-          { label: 'On Leave', value: employeeStats.onLeave, icon: <UserMinus />, color: 'bg-amber-500' },
-        ]}
-        chartData={empChartData}
-      />
-      <ReportCard 
-        title="Students Report"
-        stats={[
-          { label: 'Total', value: studentStats.total, icon: <GraduationCap />, color: 'bg-purple-500' },
-          { label: 'Present', value: studentStats.present, icon: <UserCheck />, color: 'bg-supabase-green' },
-          { label: 'Boys', value: studentStats.boys, icon: <Baby />, color: 'bg-blue-400' },
-          { label: 'Girls', value: studentStats.girls, icon: <UserCircle2 />, color: 'bg-pink-400' },
-        ]}
-        chartData={studentChartData}
-      />
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      {/* Employees Group Card */}
+      <motion.div 
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5 }}
+        className="bg-supabase-panel border border-supabase-border rounded-xl p-5 shadow-sm relative overflow-hidden group"
+      >
+        <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
+          <Users size={80} />
+        </div>
+        
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-3">
+            <div className="w-1 h-4 bg-blue-500 rounded-full"></div>
+            <h3 className="text-xs font-black text-supabase-text uppercase tracking-[0.2em]">Employee Hub</h3>
+          </div>
+          <div className="text-[9px] font-bold text-supabase-green uppercase tracking-widest flex items-center gap-1">
+            <TrendingUp size={10} />
+            Live Status
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2">
+          <MiniStat label="Total Staff" value={employeeStats.total} icon={<Users />} color="bg-blue-500" delay={0.1} />
+          <MiniStat label="Present" value={employeeStats.present} icon={<UserCheck />} color="bg-supabase-green" delay={0.2} />
+          <MiniStat label="Absent" value={employeeStats.absent} icon={<UserX />} color="bg-red-500" delay={0.3} />
+          <MiniStat label="On Leave" value={employeeStats.onLeave} icon={<UserMinus />} color="bg-amber-500" delay={0.4} />
+        </div>
+      </motion.div>
+
+      {/* Students Group Card */}
+      <motion.div 
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, delay: 0.1 }}
+        className="bg-supabase-panel border border-supabase-border rounded-xl p-5 shadow-sm relative overflow-hidden group"
+      >
+        <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
+          <GraduationCap size={80} />
+        </div>
+
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-3">
+            <div className="w-1 h-4 bg-purple-500 rounded-full"></div>
+            <h3 className="text-xs font-black text-supabase-text uppercase tracking-[0.2em]">Student Hub</h3>
+          </div>
+          <div className="text-[9px] font-bold text-supabase-green uppercase tracking-widest flex items-center gap-1">
+            <TrendingUp size={10} />
+            Live Status
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2">
+          <MiniStat label="Total Students" value={studentStats.total} icon={<GraduationCap />} color="bg-purple-500" delay={0.5} />
+          <MiniStat label="Present Today" value={studentStats.present} icon={<UserCheck />} color="bg-supabase-green" delay={0.6} />
+          <MiniStat label="Boys Count" value={studentStats.boys} icon={<Baby />} color="bg-blue-400" delay={0.7} />
+          <MiniStat label="Girls Count" value={studentStats.girls} icon={<UserCircle2 />} color="bg-pink-400" delay={0.8} />
+        </div>
+      </motion.div>
     </div>
   );
-};
+});
+
+DashboardReports.displayName = 'DashboardReports';
 
 export default DashboardReports;
