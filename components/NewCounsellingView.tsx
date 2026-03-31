@@ -1,15 +1,19 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Save, User, Phone, Mail, MapPin, BookOpen, Clock, Info, CheckCircle2, Loader2 } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
 import { counsellingService } from '../services/counsellingService';
+import { academicService, PreferredCourse } from '../services/academicService';
 
 const NewCounsellingView: React.FC = () => {
   const { showToast } = useToast();
   const { user } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [courses, setCourses] = useState<PreferredCourse[]>([]);
+  const [loadingCourses, setLoadingCourses] = useState(true);
+
   const [formData, setFormData] = useState({
     date: new Date().toISOString().split('T')[0],
     student_name: '',
@@ -36,6 +40,20 @@ const NewCounsellingView: React.FC = () => {
     }
   });
 
+  useEffect(() => {
+    const fetchCourses = async () => {
+      try {
+        const data = await academicService.getCourses();
+        setCourses(data.filter(c => c.status === 'active'));
+      } catch (error: any) {
+        showToast('Failed to load courses', 'error');
+      } finally {
+        setLoadingCourses(false);
+      }
+    };
+    fetchCourses();
+  }, []);
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     if (name.includes('.')) {
@@ -56,9 +74,17 @@ const NewCounsellingView: React.FC = () => {
     e.preventDefault();
     setIsSubmitting(true);
     try {
+      const creator = user?.name || 'Unknown';
       await counsellingService.addRecord({
         ...formData,
-        created_by: user?.name || 'Unknown'
+        created_by: creator,
+        activity_log: [
+          {
+            action: 'created',
+            user: creator,
+            timestamp: new Date().toISOString()
+          }
+        ]
       });
       showToast('Counselling record saved successfully', 'success');
       // Reset form
@@ -276,14 +302,19 @@ const NewCounsellingView: React.FC = () => {
             </div>
             <div>
               <label className={labelClasses}>Preferred Course</label>
-              <input 
-                type="text" 
+              <select 
                 name="course_interest.preferred_course"
-                placeholder="Course they are interested in"
+                required
                 value={formData.course_interest.preferred_course}
                 onChange={handleChange}
                 className={inputClasses}
-              />
+                disabled={loadingCourses}
+              >
+                <option value="">{loadingCourses ? 'Loading courses...' : 'Select Preferred Course'}</option>
+                {courses.map(course => (
+                  <option key={course.id} value={course.name}>{course.name}</option>
+                ))}
+              </select>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>

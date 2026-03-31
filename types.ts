@@ -39,7 +39,8 @@ export enum View {
   BILLING = 'BILLING',
   PARENTS = 'PARENTS',
   NEW_COUNSELLING = 'NEW_COUNSELLING',
-  COUNSELLING_LOG = 'COUNSELLING_LOG'
+  COUNSELLING_LOG = 'COUNSELLING_LOG',
+  ACADEMIC_CONTROL = 'ACADEMIC_CONTROL'
 }
 
 export type EducationLevel = 'junior' | 'senior' | 'all';
@@ -145,6 +146,13 @@ export interface Student {
   created_at?: string;
 }
 
+export interface ActivityLogItem {
+  action: 'created' | 'edited' | 'approved' | 'rejected';
+  user: string;
+  timestamp: string;
+  note?: string;
+}
+
 export interface CounsellingRecord {
   id: string;
   date: string;
@@ -172,4 +180,10 @@ export interface CounsellingRecord {
   };
   created_by?: string;
   created_at?: string;
+  status?: 'pending' | 'approved' | 'rejected';
+  approved_by?: string;
+  rejected_by?: string;
+  last_edited_by?: string;
+  activity_log?: ActivityLogItem[];
+  updated_at?: string;
 }

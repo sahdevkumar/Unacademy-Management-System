@@ -31,5 +31,20 @@ export const counsellingService = {
       .eq('id', id);
     
     if (error) throw error;
+  },
+
+  async updateRecord(id: string, updates: Partial<CounsellingRecord>) {
+    const { data, error } = await supabase
+      .from('counselling_records')
+      .update({
+        ...updates,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', id)
+      .select()
+      .single();
+    
+    if (error) throw error;
+    return data as CounsellingRecord;
   }
 };

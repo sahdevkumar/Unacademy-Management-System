@@ -323,6 +323,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, isOpen = f
             Management
           </div>
           
+          {renderNavItem(View.ACADEMIC_CONTROL, 'Academic Control', <BookOpen size={18} />, 'VIEW_SETTINGS')}
           {renderNavItem(View.TEACHERS, 'Teachers List', <GraduationCap size={18} />, 'MANAGE_TEACHERS')}
           {renderNavItem(View.EMPLOYEES, 'Employees', <Briefcase size={18} />, 'MANAGE_TEACHERS')}
           {renderNavItem(View.ACCESS_CONTROL, 'Access Control', <ShieldCheck size={18} />, 'MANAGE_ROLES')}

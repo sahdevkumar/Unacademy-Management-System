@@ -275,8 +275,29 @@ CREATE TABLE IF NOT EXISTS counselling_records (
     occupation TEXT,
     course_interest JSONB DEFAULT '{}'::jsonb,
     additional_information JSONB DEFAULT '{}'::jsonb,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    status TEXT DEFAULT 'pending',
+    created_by TEXT,
+    approved_by TEXT,
+    rejected_by TEXT,
+    last_edited_by TEXT,
+    activity_log JSONB DEFAULT '[]'::jsonb,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Trigger for updated_at in counselling_records
+CREATE OR REPLACE FUNCTION update_counselling_records_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = CURRENT_TIMESTAMP;
+    RETURN NEW;
+END;
+$$ language 'plpgsql';
+
+CREATE TRIGGER update_counselling_records_updated_at
+    BEFORE UPDATE ON counselling_records
+    FOR EACH ROW
+    EXECUTE FUNCTION update_counselling_records_updated_at_column();
 
 -- Enable RLS for all tables
 ALTER TABLE system_config ENABLE ROW LEVEL SECURITY;
