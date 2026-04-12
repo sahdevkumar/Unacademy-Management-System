@@ -44,14 +44,13 @@ const StudentsView: React.FC = () => {
     const initialize = async () => {
       setIsLoading(true);
       try {
-        // Fetch classes for filter
-        const classData = await scheduleService.getClasses();
+        // Fetch classes, students, and parents in parallel
+        const [classData] = await Promise.all([
+          scheduleService.getClasses(),
+          fetchStudents(),
+          fetchParents()
+        ]);
         setClasses(classData);
-
-        // Fetch students
-        await fetchStudents();
-        // Fetch parents
-        await fetchParents();
       } catch (error: any) {
         showToast("Initialization failed: " + error.message, "error");
       } finally {

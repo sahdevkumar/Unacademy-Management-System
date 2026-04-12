@@ -27,8 +27,12 @@ import { Search as SearchIcon } from 'lucide-react';
 
 interface Registration {
     id: string;
+    sid?: string;
     student_name: string;
-    parent_name: string;
+    gender?: string;
+    date_of_birth?: string;
+    address?: string;
+    parent_data?: any;
     phone: string;
     email: string;
     class_id: string;
@@ -92,10 +96,12 @@ const AdmissionView: React.FC = () => {
         const initialize = async () => {
             setIsLoading(true);
             try {
-                const classData = await scheduleService.getClasses();
+                const [classData] = await Promise.all([
+                    scheduleService.getClasses(),
+                    fetchApprovedRegistrations(),
+                    fetchParents()
+                ]);
                 setClasses(classData);
-                await fetchApprovedRegistrations();
-                await fetchParents();
             } catch (error: any) {
                 showToast("Initialization failed: " + error.message, "error");
             } finally {
@@ -109,14 +115,12 @@ const AdmissionView: React.FC = () => {
         if (!supabase) return;
         try {
             const { data, error } = await supabase
-                .from('system_config')
-                .select('value')
-                .eq('key', 'registrations_data')
-                .maybeSingle();
+                .from('registrations')
+                .select('*')
+                .in('status', ['approved', 'admission', '4', '40', '41', '43']);
             
             if (error) throw error;
-            const allRegs = (data?.value || []) as Registration[];
-            setApprovedRegistrations(allRegs.filter(r => r.status === '4' || r.status === 'admission' || r.status === 'approved'));
+            setApprovedRegistrations(data || []);
         } catch (error: any) {
             showToast("Failed to fetch approved registrations: " + error.message, "error");
         }
@@ -148,19 +152,19 @@ const AdmissionView: React.FC = () => {
             roll_number: '', // To be filled
             class_name: targetClass?.name || '',
             parent_id: existingParent?.id || '',
-            guardian_name: reg.parent_name,
+            guardian_name: reg.parent_data?.parents_name || '',
             contact_number: reg.phone,
             email: reg.email || '',
-            address: '',
-            date_of_birth: '',
-            gender: 'Male',
+            address: reg.address || '',
+            date_of_birth: reg.date_of_birth || '',
+            gender: reg.gender || 'Male',
             status: 'active'
         });
-        setSearchTermParent(existingParent?.full_name || reg.parent_name);
+        setSearchTermParent(existingParent?.full_name || reg.parent_data?.parents_name || '');
         setShowAddParentForm(!existingParent);
         if (!existingParent) {
             setNewParent({
-                full_name: reg.parent_name,
+                full_name: reg.parent_data?.parents_name || '',
                 phone: reg.phone,
                 email: reg.email,
                 status: 'active'
@@ -235,23 +239,12 @@ const AdmissionView: React.FC = () => {
             
             if (studentError) throw studentError;
             
-            // 2. Update registration status in system_config if applicable
+            // 2. Update registration status if applicable
             if (selectedRegistration) {
-                const { data: configData } = await supabase
-                    .from('system_config')
-                    .select('value')
-                    .eq('key', 'registrations_data')
-                    .maybeSingle();
-                
-                const allRegs = (configData?.value || []) as Registration[];
-                const updatedRegs = allRegs.map(reg => 
-                    reg.id === selectedRegistration.id ? { ...reg, status: '5' } : reg
-                );
-
-                const { error: regError } = await supabase.from('system_config').upsert({
-                    key: 'registrations_data',
-                    value: updatedRegs
-                }, { onConflict: 'key' });
+                const { error: regError } = await supabase
+                    .from('registrations')
+                    .update({ status: 'admitted' })
+                    .eq('id', selectedRegistration.id);
                 
                 if (regError) throw regError;
             }

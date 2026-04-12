@@ -273,17 +273,38 @@ CREATE TABLE IF NOT EXISTS registrations (
     sid TEXT UNIQUE,
     row_student_id UUID REFERENCES row_students(id),
     student_name TEXT NOT NULL,
-    parent_name TEXT,
+    gender TEXT,
+    date_of_birth DATE,
+    address TEXT,
+    parent_data JSONB DEFAULT '{}'::jsonb,
     phone TEXT NOT NULL,
     email TEXT,
     class_id UUID REFERENCES classes(id),
+    course_interest JSONB DEFAULT '{}'::jsonb,
+    additional_information JSONB DEFAULT '{}'::jsonb,
     status TEXT DEFAULT 'pending', -- pending, approved, rejected, admitted
     registration_fee_status TEXT DEFAULT 'unpaid',
+    registration_fee_required BOOLEAN DEFAULT TRUE,
     counsellor_eid TEXT,
     map_leader_eid TEXT,
     row_student_token_no TEXT,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Trigger for updated_at in registrations
+CREATE OR REPLACE FUNCTION update_registrations_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = CURRENT_TIMESTAMP;
+    RETURN NEW;
+END;
+$$ language 'plpgsql';
+
+CREATE TRIGGER update_registrations_updated_at
+    BEFORE UPDATE ON registrations
+    FOR EACH ROW
+    EXECUTE FUNCTION update_registrations_updated_at_column();
 
 CREATE TABLE IF NOT EXISTS student_feedback (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

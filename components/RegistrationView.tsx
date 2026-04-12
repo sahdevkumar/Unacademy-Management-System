@@ -30,12 +30,19 @@ interface Registration {
     sid?: string;
     row_student_id?: string;
     student_name: string;
+    gender?: string;
+    date_of_birth?: string;
+    address?: string;
     parent_name: string;
     phone: string;
     email: string;
     class_id: string;
     status: string; // '0' | '1' | '2' | '3' | '4' | '5'
     registration_fee_status: 'paid' | 'unpaid';
+    registration_fee_required?: boolean;
+    parent_data?: any;
+    course_interest?: any;
+    additional_information?: any;
     counsellor_eid?: string;
     map_leader_eid?: string;
     row_student_token_no?: string;
@@ -80,9 +87,14 @@ const RegistrationView: React.FC = () => {
     // Modal state
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isProcessModalOpen, setIsProcessModalOpen] = useState(false);
+    const [isApproveModalOpen, setIsApproveModalOpen] = useState(false);
     const [isViewModalOpen, setIsViewModalOpen] = useState(false);
     const [selectedRegistration, setSelectedRegistration] = useState<Registration | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [approveFormData, setApproveFormData] = useState({
+        class_id: '',
+        registration_fee_required: true
+    });
     const [formData, setFormData] = useState<Partial<Registration>>({
         student_name: '',
         parent_name: '',
@@ -93,16 +105,21 @@ const RegistrationView: React.FC = () => {
         registration_fee_status: 'unpaid'
     });
 
+    const inputClasses = "w-full bg-supabase-sidebar border border-supabase-border rounded-lg px-4 py-2.5 text-supabase-text focus:outline-none focus:border-supabase-green transition-all font-medium placeholder:text-supabase-muted/50";
+    const labelClasses = "text-[10px] font-black text-supabase-muted uppercase tracking-widest ml-1";
+
     useEffect(() => {
         const initialize = async () => {
             setIsLoading(true);
             try {
-                const classData = await scheduleService.getClasses();
+                const [classData] = await Promise.all([
+                    scheduleService.getClasses(),
+                    fetchRegistrations()
+                ]);
                 setClasses(classData);
                 if (classData.length > 0) {
                     setFormData(prev => ({ ...prev, class_id: classData[0].id }));
                 }
-                await fetchRegistrations();
             } catch (error: any) {
                 showToast("Initialization failed: " + error.message, "error");
             } finally {
@@ -115,31 +132,39 @@ const RegistrationView: React.FC = () => {
     const fetchRegistrations = async () => {
         if (!supabase) return;
         try {
-            // Fetch counselling records
-            const records = await counsellingService.getRecords();
+            setIsLoading(true);
+            // Fetch row_students with their linked registrations in a single query
+            const { data: records, error } = await supabase
+                .from('row_students')
+                .select('*, registrations(*)')
+                .order('created_at', { ascending: false });
             
-            // Fetch existing registrations to get SIDs
-            const { data: regData } = await supabase
-                .from('registrations')
-                .select('*');
+            if (error) throw error;
             
-            const mappedRegs: Registration[] = records
+            const mappedRegs: Registration[] = (records as any[])
                 .map(record => {
-                    const regInfo = regData?.find(r => r.row_student_id === record.id);
+                    const regInfo = record.registrations?.[0];
                     return {
                         id: record.id,
                         sid: regInfo?.sid,
                         row_student_id: record.id,
                         student_name: record.student_name,
-                        parent_name: record.parent_data?.parents_name || '',
+                        gender: regInfo?.gender || record.gender,
+                        date_of_birth: regInfo?.date_of_birth || record.date_of_birth,
+                        address: regInfo?.address || record.address,
+                        parent_name: regInfo?.parent_data?.parents_name || record.parent_data?.parents_name || '',
                         phone: record.contact_no,
                         email: record.email || '',
-                        class_id: record.additional_information?.class_id || null,
+                        class_id: regInfo?.class_id || record.additional_information?.class_id || null,
                         status: record.status || '3',
-                        registration_fee_status: record.additional_information?.registration_fee_status || 'unpaid',
-                        counsellor_eid: regInfo?.counsellor_eid,
-                        map_leader_eid: regInfo?.map_leader_eid,
-                        row_student_token_no: regInfo?.row_student_token_no,
+                        registration_fee_status: regInfo?.registration_fee_status || record.additional_information?.registration_fee_status || 'unpaid',
+                        registration_fee_required: regInfo?.registration_fee_required ?? true,
+                        parent_data: regInfo?.parent_data || record.parent_data || {},
+                        course_interest: regInfo?.course_interest || record.course_interest || {},
+                        additional_information: regInfo?.additional_information || record.additional_information || {},
+                        counsellor_eid: regInfo?.counsellor_eid || record.counsellor_eid,
+                        map_leader_eid: regInfo?.map_leader_eid || record.map_leader_eid,
+                        row_student_token_no: regInfo?.row_student_token_no || record.token_no,
                         created_at: record.created_at || new Date().toISOString(),
                         counselling_data: record
                     };
@@ -148,6 +173,8 @@ const RegistrationView: React.FC = () => {
             setRegistrations(mappedRegs);
         } catch (error: any) {
             showToast("Failed to fetch registrations: " + error.message, "error");
+        } finally {
+            setIsLoading(false);
         }
     };
 
@@ -217,7 +244,7 @@ const RegistrationView: React.FC = () => {
         return `SID${year}${month}${randomDigits}`;
     };
 
-    const updateStatus = async (id: string, newStatus: Registration['status']) => {
+    const updateStatus = async (id: string, newStatus: Registration['status'], extraData?: { class_id?: string, registration_fee_required?: boolean }) => {
         if (!supabase) return;
         try {
             // If status is being updated to '1' or '31' (Approved), generate SID and save to registrations table
@@ -229,6 +256,9 @@ const RegistrationView: React.FC = () => {
                     console.log("Generated SID:", sid);
                     console.log("Record data for registration:", record);
                     
+                    const classId = extraData?.class_id || record.class_id;
+                    const feeRequired = extraData?.registration_fee_required ?? true;
+
                     // Check if registration already exists
                     const { data: existingReg, error: checkError } = await supabase
                         .from('registrations')
@@ -246,6 +276,14 @@ const RegistrationView: React.FC = () => {
                             .update({ 
                                 sid: sid,
                                 status: 'approved',
+                                class_id: classId || null,
+                                registration_fee_required: feeRequired,
+                                gender: record.gender,
+                                date_of_birth: record.date_of_birth,
+                                address: record.address,
+                                parent_data: record.parent_data || { parents_name: record.parent_name },
+                                course_interest: record.course_interest || {},
+                                additional_information: record.additional_information || {},
                                 counsellor_eid: record.counselling_data?.counsellor_eid,
                                 map_leader_eid: record.counselling_data?.map_leader_eid,
                                 row_student_token_no: record.counselling_data?.token_no
@@ -263,12 +301,18 @@ const RegistrationView: React.FC = () => {
                                 sid: sid,
                                 row_student_id: id,
                                 student_name: record.student_name,
-                                parent_name: record.parent_name,
+                                gender: record.gender,
+                                date_of_birth: record.date_of_birth,
+                                address: record.address,
+                                parent_data: record.parent_data || { parents_name: record.parent_name },
                                 phone: record.phone,
                                 email: record.email,
-                                class_id: record.class_id || null,
+                                class_id: classId || null,
+                                course_interest: record.course_interest || {},
+                                additional_information: record.additional_information || {},
                                 status: 'approved',
                                 registration_fee_status: record.registration_fee_status,
+                                registration_fee_required: feeRequired,
                                 counsellor_eid: record.counselling_data?.counsellor_eid,
                                 map_leader_eid: record.counselling_data?.map_leader_eid,
                                 row_student_token_no: record.counselling_data?.token_no
@@ -430,17 +474,28 @@ const RegistrationView: React.FC = () => {
                                                 </span>
                                             </td>
                                             <td className="px-6 py-4">
-                                                <button 
-                                                    onClick={() => updateFeeStatus(reg.id, reg.registration_fee_status === 'paid' ? 'unpaid' : 'paid')}
-                                                    className={`flex items-center gap-2 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest transition-all ${
-                                                        reg.registration_fee_status === 'paid' 
-                                                        ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' 
-                                                        : 'bg-amber-500/10 text-amber-500 border border-amber-500/20'
-                                                    }`}
-                                                >
-                                                    <CreditCard size={12} />
-                                                    {reg.registration_fee_status}
-                                                </button>
+                                                {reg.registration_fee_required !== false ? (
+                                                    <div className="flex flex-col gap-2">
+                                                        <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-tighter w-fit bg-supabase-green/10 text-supabase-green border border-supabase-green/20">
+                                                            Fee Required
+                                                        </div>
+                                                        <button 
+                                                            onClick={() => updateFeeStatus(reg.id, reg.registration_fee_status === 'paid' ? 'unpaid' : 'paid')}
+                                                            className={`flex items-center gap-2 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest transition-all w-fit ${
+                                                                reg.registration_fee_status === 'paid' 
+                                                                ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' 
+                                                                : 'bg-amber-500/10 text-amber-500 border border-amber-500/20'
+                                                            }`}
+                                                        >
+                                                            <CreditCard size={12} />
+                                                            {reg.registration_fee_status}
+                                                        </button>
+                                                    </div>
+                                                ) : (
+                                                    <span className="text-[10px] font-bold text-supabase-muted uppercase tracking-widest italic">
+                                                        No Fee Required
+                                                    </span>
+                                                )}
                                             </td>
                                             <td className="px-6 py-4">
                                                 <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest ${getStatusColor(reg.status)}`}>
@@ -458,7 +513,14 @@ const RegistrationView: React.FC = () => {
                                                     {reg.status === '1' && (
                                                         <>
                                                             <button 
-                                                                onClick={() => updateStatus(reg.id, '31')}
+                                                                onClick={() => {
+                                                                    setSelectedRegistration(reg);
+                                                                    setApproveFormData({
+                                                                        class_id: reg.class_id || (classes.length > 0 ? classes[0].id : ''),
+                                                                        registration_fee_required: true
+                                                                    });
+                                                                    setIsApproveModalOpen(true);
+                                                                }}
                                                                 className="p-2 text-supabase-green hover:bg-supabase-green/10 rounded-lg transition-all"
                                                                 title="Approve Registration"
                                                             >
@@ -608,6 +670,104 @@ const RegistrationView: React.FC = () => {
                 </div>
             )}
 
+            {/* Approve Registration Modal */}
+            {isApproveModalOpen && selectedRegistration && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+                    <div className="bg-supabase-panel border border-supabase-border rounded-2xl w-full max-w-md shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+                        <div className="px-6 py-4 border-b border-supabase-border flex items-center justify-between bg-supabase-sidebar/50">
+                            <h2 className="text-lg font-black text-supabase-text uppercase tracking-widest flex items-center gap-2">
+                                <CheckCircle2 className="text-supabase-green" size={20} />
+                                Approve Registration
+                            </h2>
+                            <button onClick={() => setIsApproveModalOpen(false)} className="text-supabase-muted hover:text-supabase-text transition-colors">
+                                <X size={20} />
+                            </button>
+                        </div>
+                        <div className="p-6 space-y-6">
+                            <div className="bg-supabase-sidebar border border-supabase-border rounded-xl p-4 space-y-3">
+                                <h3 className="text-[10px] font-black text-supabase-muted uppercase tracking-widest border-b border-supabase-border pb-2">Student Preview</h3>
+                                <div>
+                                    <p className="text-[10px] font-bold text-supabase-muted uppercase tracking-widest">Name</p>
+                                    <p className="text-sm text-supabase-text font-bold">{selectedRegistration.student_name}</p>
+                                </div>
+                                <div>
+                                    <p className="text-[10px] font-bold text-supabase-muted uppercase tracking-widest">Phone</p>
+                                    <p className="text-sm text-supabase-text font-medium">{selectedRegistration.phone}</p>
+                                </div>
+                            </div>
+
+                            <div className="space-y-4">
+                                <div className="space-y-2">
+                                    <label className={labelClasses}>Assign Class</label>
+                                    <select 
+                                        value={approveFormData.class_id}
+                                        onChange={(e) => setApproveFormData({...approveFormData, class_id: e.target.value})}
+                                        className={inputClasses}
+                                    >
+                                        <option value="">Select Class</option>
+                                        {classes.map(c => (
+                                            <option key={c.id} value={c.id}>{c.name} - {c.section}</option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                <div className="space-y-2">
+                                    <label className={labelClasses}>Registration Fee Required?</label>
+                                    <div className="flex gap-4">
+                                        <label className="flex items-center gap-2 cursor-pointer">
+                                            <input 
+                                                type="radio" 
+                                                checked={approveFormData.registration_fee_required === true}
+                                                onChange={() => setApproveFormData({...approveFormData, registration_fee_required: true})}
+                                                className="text-supabase-green focus:ring-supabase-green"
+                                            />
+                                            <span className="text-sm text-supabase-text">Yes</span>
+                                        </label>
+                                        <label className="flex items-center gap-2 cursor-pointer">
+                                            <input 
+                                                type="radio" 
+                                                checked={approveFormData.registration_fee_required === false}
+                                                onChange={() => setApproveFormData({...approveFormData, registration_fee_required: false})}
+                                                className="text-supabase-green focus:ring-supabase-green"
+                                            />
+                                            <span className="text-sm text-supabase-text">No</span>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="flex gap-3 pt-2">
+                                <button 
+                                    onClick={() => setIsApproveModalOpen(false)}
+                                    className="flex-1 px-4 py-2 border border-supabase-border rounded-lg text-sm font-bold text-supabase-muted hover:text-supabase-text hover:bg-supabase-hover transition-all"
+                                >
+                                    Cancel
+                                </button>
+                                <button 
+                                    onClick={async () => {
+                                        setIsSubmitting(true);
+                                        try {
+                                            await updateStatus(selectedRegistration.id, '31', approveFormData);
+                                            setIsApproveModalOpen(false);
+                                            setSelectedRegistration(null);
+                                        } catch (error) {
+                                            // Error handled in updateStatus
+                                        } finally {
+                                            setIsSubmitting(false);
+                                        }
+                                    }}
+                                    disabled={isSubmitting}
+                                    className="flex-1 bg-supabase-green text-black px-4 py-2 rounded-lg font-bold text-sm flex items-center justify-center gap-2 hover:bg-supabase-greenHover transition-all shadow-lg shadow-supabase-green/20 disabled:opacity-50"
+                                >
+                                    {isSubmitting ? <Loader2 className="animate-spin" size={18} /> : <CheckCircle2 size={18} />}
+                                    Confirm Approval
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Process Registration Modal */}
             {isProcessModalOpen && selectedRegistration && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
@@ -740,17 +900,19 @@ const RegistrationView: React.FC = () => {
                                             ))}
                                         </select>
                                     </div>
-                                    <div className="space-y-2">
-                                        <label className="text-[10px] font-bold text-supabase-muted uppercase tracking-widest">Fee Status</label>
-                                        <select 
-                                            value={selectedRegistration.registration_fee_status}
-                                            onChange={(e) => setSelectedRegistration({...selectedRegistration, registration_fee_status: e.target.value as 'paid' | 'unpaid'})}
-                                            className="w-full bg-supabase-panel border border-supabase-border rounded-lg px-4 py-2 text-sm text-supabase-text focus:outline-none focus:border-supabase-green transition-all"
-                                        >
-                                            <option value="unpaid">Unpaid</option>
-                                            <option value="paid">Paid</option>
-                                        </select>
-                                    </div>
+                                    {selectedRegistration.registration_fee_required !== false && (
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-bold text-supabase-muted uppercase tracking-widest">Fee Status</label>
+                                            <select 
+                                                value={selectedRegistration.registration_fee_status}
+                                                onChange={(e) => setSelectedRegistration({...selectedRegistration, registration_fee_status: e.target.value as 'paid' | 'unpaid'})}
+                                                className="w-full bg-supabase-panel border border-supabase-border rounded-lg px-4 py-2 text-sm text-supabase-text focus:outline-none focus:border-supabase-green transition-all"
+                                            >
+                                                <option value="unpaid">Unpaid</option>
+                                                <option value="paid">Paid</option>
+                                            </select>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
 

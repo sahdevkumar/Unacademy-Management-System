@@ -50,31 +50,37 @@ const CounsellingLogView: React.FC = () => {
   };
 
   const fetchRecords = async () => {
-    setLoading(true);
     try {
       const data = await counsellingService.getRecords();
       setRecords(data);
     } catch (error: any) {
       showToast(error.message || 'Failed to fetch records', 'error');
-    } finally {
-      setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchRecords();
-    fetchCourses();
+    const initialize = async () => {
+      setLoading(true);
+      try {
+        await Promise.all([
+          fetchRecords(),
+          fetchCourses()
+        ]);
+      } catch (error: any) {
+        showToast("Initialization failed: " + error.message, "error");
+      } finally {
+        setLoading(false);
+      }
+    };
+    initialize();
   }, []);
 
   const fetchCourses = async () => {
-    setLoadingCourses(true);
     try {
       const data = await academicService.getCourses();
       setCourses(data.filter(c => c.status === 'active'));
     } catch (error: any) {
       console.error('Failed to load courses', error);
-    } finally {
-      setLoadingCourses(false);
     }
   };
 
