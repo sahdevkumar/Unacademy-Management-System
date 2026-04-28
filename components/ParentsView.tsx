@@ -5,6 +5,7 @@ import { motion } from 'motion/react';
 import { supabase } from '../services/supabaseClient';
 import { useToast } from '../context/ToastContext';
 import { Parent } from '../types';
+import { validateMobileNumber } from '../services/validationService';
 
 const ParentsView: React.FC = () => {
   const { showToast } = useToast();
@@ -62,6 +63,11 @@ const ParentsView: React.FC = () => {
 
     setIsSaving(true);
     try {
+      const validation = await validateMobileNumber(editingParent.phone, 'parents', editingParent.id);
+      if (!validation.isValid) {
+        throw new Error(validation.error || "Invalid mobile number");
+      }
+
       const { error } = await supabase
         .from('parents')
         .upsert({
@@ -101,7 +107,12 @@ const ParentsView: React.FC = () => {
         .delete()
         .eq('id', parentToDelete.id);
 
-      if (error) throw error;
+      if (error) {
+        if (error.message.includes('foreign key constraint') || error.message.includes('students_parent_id_fkey')) {
+          throw new Error("Cannot delete parent: There are students still linked to this parent. Please reassign or remove them first.");
+        }
+        throw error;
+      }
 
       showToast("Parent record deleted", "success");
       setIsDeleteConfirmOpen(false);
@@ -379,10 +390,15 @@ const ParentsView: React.FC = () => {
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-supabase-muted uppercase tracking-widest">Phone Number</label>
                   <input 
-                    type="text"
+                    type="number"
                     className="w-full bg-supabase-bg border border-supabase-border rounded-xl px-4 py-2.5 text-sm text-supabase-text focus:outline-none focus:border-supabase-green transition-all"
                     value={editingParent.phone}
-                    onChange={(e) => setEditingParent({...editingParent, phone: e.target.value})}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val.length <= 10) {
+                        setEditingParent({...editingParent, phone: val});
+                      }
+                    }}
                     required
                   />
                 </div>

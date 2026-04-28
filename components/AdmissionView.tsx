@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../services/supabaseClient';
 import { scheduleService } from '../services/scheduleService';
+import { validateMobileNumber } from '../services/validationService';
 import { useToast } from '../context/ToastContext';
 import { ClassInfo, Parent, Student } from '../types';
 import { Search as SearchIcon } from 'lucide-react';
@@ -77,6 +78,7 @@ const AdmissionView: React.FC = () => {
     const [currentStep, setCurrentStep] = useState(1);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [selectedRegistration, setSelectedRegistration] = useState<Registration | null>(null);
+    const [isAdmissionVerified, setIsAdmissionVerified] = useState(false);
     
     const [admissionData, setAdmissionData] = useState<Partial<Student>>({
         user_id: '',
@@ -212,6 +214,7 @@ const AdmissionView: React.FC = () => {
     const handleStartAdmission = (reg: Registration) => {
         setSelectedRegistration(reg);
         setCurrentStep(1);
+        setIsAdmissionVerified(false);
         
         // Find class name from class_id
         const targetClass = classes.find(c => c.id === reg.class_id);
@@ -250,6 +253,7 @@ const AdmissionView: React.FC = () => {
     const handleDirectAdmission = () => {
         setSelectedRegistration(null);
         setCurrentStep(1);
+        setIsAdmissionVerified(false);
         setAdmissionData({
             user_id: '',
             full_name: '',
@@ -268,6 +272,55 @@ const AdmissionView: React.FC = () => {
         setShowAddParentForm(false);
         setNewParent({ full_name: '', phone: '', email: '', occupation: '', status: 'active' });
         setIsAdmissionModalOpen(true);
+    };
+
+    const handleNextStep = async () => {
+        if (currentStep === 1) {
+            if (!admissionData.full_name || !admissionData.date_of_birth || !admissionData.class_name) {
+                showToast("Please fill all required student fields", "error");
+                return;
+            }
+            setCurrentStep(2);
+        } else if (currentStep === 2) {
+            if (!showAddParentForm && !admissionData.parent_id) {
+                showToast("Please select an existing parent or add a new one", "error");
+                return;
+            }
+            
+            if (showAddParentForm) {
+                if (!newParent.full_name || !newParent.phone || !newParent.email || !newParent.occupation) {
+                    showToast("Please fill all required New Parent details (Name, Phone, Email, Occupation)", "error");
+                    return;
+                }
+                const validation = await validateMobileNumber(newParent.phone, 'parents');
+                if (!validation.isValid) {
+                    showToast(validation.error || "Invalid mobile number", "error");
+                    return;
+                }
+            } else if (!admissionData.contact_number) {
+                 showToast("Contact number is missing for the selected parent", "error");
+                 return;
+            }
+            
+            if (!showAddParentForm && admissionData.contact_number) {
+                 // Even if using existing or pre-filled from registration
+                 const validation = await validateMobileNumber(admissionData.contact_number, 'students');
+                 // Wait, we allow it if it's not a new parent, it doesn't need to be checked against parents db?
+                 // But the requirement says "validate mobile number". Let's check length at least.
+                 const numericOnly = (admissionData.contact_number || '').replace(/\D/g, '');
+                 if (numericOnly.length !== 10) {
+                     showToast("Mobile number must be exactly 10 digits", "error");
+                     return;
+                 }
+            }
+
+            if (!admissionData.address) {
+                showToast("Please provide an address", "error");
+                return;
+            }
+            
+            setCurrentStep(3);
+        }
     };
 
     const handleSubmitAdmission = async (e: React.FormEvent) => {
@@ -710,9 +763,15 @@ const AdmissionView: React.FC = () => {
                                                             <div className="relative">
                                                                 <Phone className="absolute left-3 top-1/2 -translate-y-1/2 text-supabase-muted" size={14} />
                                                                 <input 
-                                                                    type="text"
+                                                                    type="number"
+                                                                    required
                                                                     value={newParent.phone || ''}
-                                                                    onChange={(e) => setNewParent({...newParent, phone: e.target.value})}
+                                                                    onChange={(e) => {
+                                                                        const val = e.target.value;
+                                                                        if (val.length <= 10) {
+                                                                            setNewParent({...newParent, phone: val});
+                                                                        }
+                                                                    }}
                                                                     className="w-full bg-supabase-sidebar border border-supabase-border rounded-lg pl-9 pr-3 py-1.5 text-sm text-supabase-text focus:outline-none focus:border-supabase-green"
                                                                 />
                                                             </div>
@@ -817,11 +876,17 @@ const AdmissionView: React.FC = () => {
                                             </div>
                                         </div>
 
-                                        <div className="bg-supabase-green/10 border border-supabase-green/20 p-4 rounded-xl flex gap-3">
-                                            <CheckCircle2 className="text-supabase-green shrink-0" size={18} />
-                                            <p className="text-xs text-supabase-green leading-relaxed">
-                                                By clicking "Confirm Admission", you verify that all the above information is correct and the student is officially admitted to the institution.
-                                            </p>
+                                        <div className="bg-supabase-green/10 border border-supabase-green/20 p-4 rounded-xl flex items-start gap-3">
+                                            <input 
+                                                type="checkbox" 
+                                                id="verify-admission"
+                                                checked={isAdmissionVerified}
+                                                onChange={(e) => setIsAdmissionVerified(e.target.checked)}
+                                                className="mt-1 accent-supabase-green"
+                                            />
+                                            <label htmlFor="verify-admission" className="text-xs text-supabase-text cursor-pointer leading-relaxed">
+                                                I verify that all the above information is correct. I understand that confirming will officially admit the student to the institution.
+                                            </label>
                                         </div>
                                     </div>
                                 )}
@@ -840,7 +905,7 @@ const AdmissionView: React.FC = () => {
                                 {currentStep < 3 ? (
                                     <button 
                                         type="button"
-                                        onClick={() => setCurrentStep(prev => prev + 1)}
+                                        onClick={handleNextStep}
                                         className="flex-1 bg-supabase-green text-black px-4 py-2 rounded-lg font-bold text-sm flex items-center justify-center gap-2 hover:bg-supabase-greenHover transition-all shadow-lg shadow-supabase-green/10"
                                     >
                                         Next Step
@@ -849,7 +914,7 @@ const AdmissionView: React.FC = () => {
                                 ) : (
                                     <button 
                                         type="submit"
-                                        disabled={isSubmitting}
+                                        disabled={isSubmitting || !isAdmissionVerified}
                                         className="flex-1 bg-supabase-green text-black px-4 py-2 rounded-lg font-bold text-sm flex items-center justify-center gap-2 hover:bg-supabase-greenHover transition-all shadow-lg shadow-supabase-green/10 disabled:opacity-50"
                                     >
                                         {isSubmitting ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />}

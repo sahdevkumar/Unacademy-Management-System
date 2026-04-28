@@ -4,6 +4,7 @@ import { Users, Search, Filter, Plus, Loader2, Mail, Phone, User, GraduationCap,
 import { motion } from 'motion/react';
 import { supabase } from '../services/supabaseClient';
 import { scheduleService } from '../services/scheduleService';
+import { validateMobileNumber } from '../services/validationService';
 import { useToast } from '../context/ToastContext';
 import { ClassInfo, Student, Parent } from '../types';
 
@@ -115,6 +116,18 @@ const StudentsView: React.FC = () => {
 
     setIsSaving(true);
     try {
+      if (showAddParentForm) {
+        if (!newParent.full_name || !newParent.phone || !newParent.email || !newParent.occupation) {
+            throw new Error("Please fill all required New Parent details (Name, Phone, Email, Occupation)");
+        }
+        const validation = await validateMobileNumber(newParent.phone, 'parents');
+        if (!validation.isValid) throw new Error(validation.error || "Invalid mobile number");
+      } else if (editingStudent.contact_number) {
+        // Validate contact number length
+        const numericOnly = editingStudent.contact_number.replace(/\D/g, '');
+        if (numericOnly.length !== 10) throw new Error("Mobile number must be exactly 10 digits");
+      }
+
       let finalPhotoUrl = editingStudent.profile_photo_url;
       
       if (selectedPhotoFile) {
@@ -226,12 +239,31 @@ const StudentsView: React.FC = () => {
 
     setIsSaving(true);
     try {
+      const parentId = studentToDelete.parent_id;
+
+      // First, delete any associated feedback records to avoid foreign key constraints
+      await supabase
+        .from('student_feedback')
+        .delete()
+        .eq('student_id', studentToDelete.id);
+
       const { error } = await supabase
         .from('students')
         .delete()
         .eq('id', studentToDelete.id);
 
       if (error) throw error;
+
+      if (parentId) {
+        const { count, error: countError } = await supabase
+          .from('students')
+          .select('id', { count: 'exact', head: true })
+          .eq('parent_id', parentId);
+
+        if (!countError && count === 0) {
+          await supabase.from('parents').delete().eq('id', parentId);
+        }
+      }
 
       showToast("Student record deleted", "success");
       setIsDeleteConfirmOpen(false);
@@ -725,10 +757,15 @@ const StudentsView: React.FC = () => {
                         <div className="space-y-2">
                           <label className="text-[10px] font-black text-supabase-muted uppercase tracking-widest">Parent Phone</label>
                           <input 
-                            type="text"
+                            type="number"
                             className="w-full bg-supabase-bg border border-supabase-border rounded-xl px-4 py-2.5 text-sm text-supabase-text focus:outline-none focus:border-supabase-green transition-all"
                             value={newParent.phone || ''}
-                            onChange={(e) => setNewParent({...newParent, phone: e.target.value})}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              if (val.length <= 10) {
+                                setNewParent({...newParent, phone: val});
+                              }
+                            }}
                             required={showAddParentForm}
                           />
                         </div>
@@ -766,10 +803,15 @@ const StudentsView: React.FC = () => {
                   <div className="space-y-2">
                     <label className="text-[10px] font-black text-supabase-muted uppercase tracking-widest">Contact Number (Display)</label>
                     <input 
-                      type="text"
+                      type="number"
                       className="w-full bg-supabase-bg border border-supabase-border rounded-xl px-4 py-2.5 text-sm text-supabase-text focus:outline-none focus:border-supabase-green transition-all"
                       value={editingStudent.contact_number || ''}
-                      onChange={(e) => setEditingStudent({...editingStudent, contact_number: e.target.value})}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (val.length <= 10) {
+                          setEditingStudent({...editingStudent, contact_number: val});
+                        }
+                      }}
                     />
                   </div>
                   <div className="space-y-2 md:col-span-2">

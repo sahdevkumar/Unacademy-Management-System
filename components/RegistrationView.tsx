@@ -22,6 +22,7 @@ import {
 import { supabase } from '../services/supabaseClient';
 import { scheduleService } from '../services/scheduleService';
 import { counsellingService } from '../services/counsellingService';
+import { validateMobileNumber } from '../services/validationService';
 import { useToast } from '../context/ToastContext';
 import { ClassInfo, RowStudent } from '../types';
 
@@ -184,6 +185,9 @@ const RegistrationView: React.FC = () => {
         
         setIsSubmitting(true);
         try {
+            const validation = await validateMobileNumber(formData.phone, 'registrations');
+            if (!validation.isValid) throw new Error(validation.error || "Invalid mobile number");
+
             const newRecord: Omit<RowStudent, 'id' | 'created_at'> = {
                 date: new Date().toISOString().split('T')[0],
                 student_name: formData.student_name || '',
@@ -617,11 +621,16 @@ const RegistrationView: React.FC = () => {
                                     <label className="text-[10px] font-bold text-supabase-muted uppercase tracking-widest">Phone Number</label>
                                     <input 
                                         required
-                                        type="tel"
+                                        type="number"
                                         value={formData.phone}
-                                        onChange={(e) => setFormData({...formData, phone: e.target.value})}
+                                        onChange={(e) => {
+                                            const val = e.target.value;
+                                            if (val.length <= 10) {
+                                                setFormData({...formData, phone: val});
+                                            }
+                                        }}
                                         className="w-full bg-supabase-sidebar border border-supabase-border rounded-lg px-4 py-2 text-sm text-supabase-text focus:outline-none focus:border-supabase-green transition-all"
-                                        placeholder="+1..."
+                                        placeholder="Mobile Number"
                                     />
                                 </div>
                                 <div className="space-y-2">
@@ -815,9 +824,14 @@ const RegistrationView: React.FC = () => {
                                     <div className="space-y-2">
                                         <label className="text-[10px] font-bold text-supabase-muted uppercase tracking-widest">Contact Number</label>
                                         <input 
-                                            type="text"
+                                            type="number"
                                             value={selectedRegistration.phone}
-                                            onChange={(e) => setSelectedRegistration({...selectedRegistration, phone: e.target.value})}
+                                            onChange={(e) => {
+                                                const val = e.target.value;
+                                                if (val.length <= 10) {
+                                                    setSelectedRegistration({...selectedRegistration, phone: val});
+                                                }
+                                            }}
                                             className="w-full bg-supabase-panel border border-supabase-border rounded-lg px-4 py-2 text-sm text-supabase-text focus:outline-none focus:border-supabase-green transition-all"
                                         />
                                     </div>
