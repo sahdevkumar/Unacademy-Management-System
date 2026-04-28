@@ -284,9 +284,9 @@ const RegistrationView: React.FC = () => {
                                 parent_data: record.parent_data || { parents_name: record.parent_name },
                                 course_interest: record.course_interest || {},
                                 additional_information: record.additional_information || {},
-                                counsellor_eid: record.counselling_data?.counsellor_eid,
-                                map_leader_eid: record.counselling_data?.map_leader_eid,
-                                row_student_token_no: record.counselling_data?.token_no
+                                counsellor_eid: record.counsellor_eid,
+                                map_leader_eid: record.map_leader_eid,
+                                row_student_token_no: record.row_student_token_no
                             })
                             .eq('row_student_id', id);
                         
@@ -313,9 +313,9 @@ const RegistrationView: React.FC = () => {
                                 status: 'approved',
                                 registration_fee_status: record.registration_fee_status,
                                 registration_fee_required: feeRequired,
-                                counsellor_eid: record.counselling_data?.counsellor_eid,
-                                map_leader_eid: record.counselling_data?.map_leader_eid,
-                                row_student_token_no: record.counselling_data?.token_no
+                                counsellor_eid: record.counsellor_eid,
+                                map_leader_eid: record.map_leader_eid,
+                                row_student_token_no: record.row_student_token_no
                             }]);
                         
                         if (insertError) {

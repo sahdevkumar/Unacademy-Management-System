@@ -207,8 +207,8 @@ const NewCounsellingView: React.FC = () => {
         status: '0',
         token_no,
         created_by: creator,
-        counsellor_eid: selectedCounsellor?.employee_id,
-        map_leader_eid: selectedMapLeader?.employee_id,
+        counsellor_eid: selectedCounsellor?.employee_id || (formData.counsellor === user?.name ? user?.employee_id : undefined),
+        map_leader_eid: selectedMapLeader?.employee_id || (formData.additional_information.map_leader === user?.name ? user?.employee_id : undefined),
         activity_log: [
           {
             action: 'created' as const,

@@ -196,6 +196,31 @@ const StudentsView: React.FC = () => {
     setIsDeleteConfirmOpen(true);
   };
 
+  const confirmInactive = async () => {
+    if (!studentToDelete || !supabase) return;
+
+    setIsSaving(true);
+    try {
+      const { error } = await supabase
+        .from('students')
+        .update({ status: 'inactive' })
+        .eq('id', studentToDelete.id);
+
+      if (error) throw error;
+
+      showToast("Student marked as inactive", "success");
+      setIsDeleteConfirmOpen(false);
+      if (selectedStudent?.id === studentToDelete.id) {
+        setSelectedStudent(prev => prev ? {...prev, status: 'inactive'} : null);
+      }
+      await fetchStudents();
+    } catch (error: any) {
+      showToast("Operation failed: " + error.message, "error");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const confirmDelete = async () => {
     if (!studentToDelete || !supabase) return;
 
@@ -309,8 +334,16 @@ const StudentsView: React.FC = () => {
             <button 
               onClick={() => handleEdit(selectedStudent)}
               className="p-2 text-supabase-muted hover:text-supabase-green hover:bg-supabase-green/10 rounded-xl transition-all"
+              title="Edit Profile"
             >
               <Edit2 size={20} />
+            </button>
+            <button 
+              onClick={() => handleDelete(selectedStudent)}
+              className="p-2 text-supabase-muted hover:text-red-500 hover:bg-red-500/10 rounded-xl transition-all"
+              title="Delete or Deactivate Profile"
+            >
+              <Trash2 size={20} />
             </button>
           </div>
         </div>
@@ -787,12 +820,20 @@ const StudentsView: React.FC = () => {
               <div className="w-20 h-20 bg-red-500/10 rounded-[2rem] flex items-center justify-center text-red-500 mx-auto mb-6 border-2 border-red-500/20">
                 {/* Trash icon removed */}
               </div>
-              <h2 className="text-xl font-black text-supabase-text uppercase tracking-tight mb-2">Delete Student Record?</h2>
+              <h2 className="text-xl font-black text-supabase-text uppercase tracking-tight mb-2">Delete or Deactivate?</h2>
               <p className="text-sm text-supabase-muted mb-8 leading-relaxed">
-                You are about to permanently delete <span className="text-supabase-text font-bold">{studentToDelete.full_name}</span> from the registry. This action cannot be undone.
+                You can mark <span className="text-supabase-text font-bold">{studentToDelete.full_name}</span> as inactive, or permanently delete them. Deletion cannot be undone.
               </p>
               
               <div className="flex flex-col gap-3">
+                <button 
+                  onClick={confirmInactive}
+                  disabled={isSaving}
+                  className="w-full bg-amber-500 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-amber-600 transition-all shadow-lg shadow-amber-500/20 flex items-center justify-center gap-2"
+                >
+                  {isSaving && <Loader2 className="animate-spin" size={16} />}
+                  Mark as Inactive
+                </button>
                 <button 
                   onClick={confirmDelete}
                   disabled={isSaving}
@@ -926,7 +967,14 @@ const StudentsView: React.FC = () => {
                           )}
                         </div>
                         <div>
-                          <div className="text-sm font-bold text-supabase-text group-hover:text-supabase-green transition-colors">{student.full_name}</div>
+                          <div className="flex items-center gap-2">
+                            <div className="text-sm font-bold text-supabase-text group-hover:text-supabase-green transition-colors">{student.full_name}</div>
+                            {student.status === 'inactive' && (
+                              <span className="text-[10px] font-black uppercase tracking-widest bg-amber-500/10 text-amber-500 border border-amber-500/20 px-2 py-0.5 rounded-md">
+                                Inactive
+                              </span>
+                            )}
+                          </div>
                           <div className="text-[10px] text-supabase-muted uppercase tracking-tighter">{student.email || 'No Email'}</div>
                         </div>
                       </div>
@@ -954,10 +1002,18 @@ const StudentsView: React.FC = () => {
                     <td className="px-6 py-4 text-right">
                       <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button 
-                          onClick={(e) => { e.stopPropagation(); /* Edit logic */ }}
+                          onClick={(e) => { e.stopPropagation(); handleEdit(student); }}
                           className="p-2 text-supabase-muted hover:text-supabase-green hover:bg-supabase-green/10 rounded-lg transition-all"
+                          title="Edit"
                         >
                           <Edit2 size={16} />
+                        </button>
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); handleDelete(student); }}
+                          className="p-2 text-supabase-muted hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-all"
+                          title="Delete / Deactivate"
+                        >
+                          <Trash2 size={16} />
                         </button>
                       </div>
                     </td>
@@ -974,12 +1030,20 @@ const StudentsView: React.FC = () => {
                 className="bg-supabase-panel border border-supabase-border rounded-2xl p-5 hover:border-supabase-green/50 transition-all group relative overflow-hidden shadow-lg cursor-pointer"
                 onClick={() => setSelectedStudent(student)}
               >
-                <div className="absolute top-0 right-0 p-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="absolute top-0 right-0 p-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
                   <button 
-                    onClick={(e) => { e.stopPropagation(); }}
-                    className="p-1.5 text-supabase-muted hover:text-supabase-text"
+                    onClick={(e) => { e.stopPropagation(); handleEdit(student); }}
+                    className="p-1.5 text-supabase-muted hover:text-supabase-green bg-supabase-sidebar/80 backdrop-blur-sm rounded-lg"
+                    title="Edit"
                   >
-                    <MoreVertical size={18} />
+                    <Edit2 size={16} />
+                  </button>
+                  <button 
+                    onClick={(e) => { e.stopPropagation(); handleDelete(student); }}
+                    className="p-1.5 text-supabase-muted hover:text-red-500 bg-supabase-sidebar/80 backdrop-blur-sm rounded-lg"
+                    title="Delete / Deactivate"
+                  >
+                    <Trash2 size={16} />
                   </button>
                 </div>
                 
@@ -999,9 +1063,14 @@ const StudentsView: React.FC = () => {
                   <h3 className="text-lg font-black text-supabase-text uppercase tracking-tight group-hover:text-supabase-green transition-colors">
                     {student.full_name}
                   </h3>
-                  <p className="text-[10px] text-supabase-muted font-black uppercase tracking-widest mt-1">
+                  <p className="text-[10px] text-supabase-muted font-black uppercase tracking-widest mt-1 mb-2">
                     Roll: {student.roll_number || 'N/A'}
                   </p>
+                  {student.status === 'inactive' && (
+                    <span className="text-[10px] font-black uppercase tracking-widest bg-amber-500/10 text-amber-500 border border-amber-500/20 px-2 py-0.5 rounded-md inline-block">
+                      Inactive
+                    </span>
+                  )}
                 </div>
                 
                 <div className="space-y-3 pt-4 border-t border-supabase-border">

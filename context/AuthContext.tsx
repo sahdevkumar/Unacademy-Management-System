@@ -274,7 +274,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const { data: profile, error } = await supabase
         .from('system_users')
-        .select('*')
+        .select('*, employees(employee_id)')
         .eq('id', authUser.id)
         .maybeSingle();
 
@@ -293,7 +293,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           id: profile.id,
           email: profile.email,
           name: profile.full_name,
-          role: userRole
+          role: userRole,
+          employee_id: profile.employees?.employee_id || undefined
         });
       } else {
         // Auto-create profile if it doesn't exist (e.g. if trigger failed or user existed before table)
@@ -317,7 +318,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           id: newProfile.id,
           email: newProfile.email,
           name: newProfile.full_name,
-          role: newProfile.role
+          role: newProfile.role,
+          employee_id: undefined
         });
       }
     } catch (e) {

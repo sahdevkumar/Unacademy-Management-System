@@ -70,7 +70,7 @@ const AdmissionView: React.FC = () => {
     // Parent Search State
     const [searchTermParent, setSearchTermParent] = useState('');
     const [showAddParentForm, setShowAddParentForm] = useState(false);
-    const [newParent, setNewParent] = useState<Partial<Parent>>({ full_name: '', phone: '', status: 'active' });
+    const [newParent, setNewParent] = useState<Partial<Parent>>({ full_name: '', phone: '', email: '', occupation: '', status: 'active' });
 
     // Admission Modal state
     const [isAdmissionModalOpen, setIsAdmissionModalOpen] = useState(false);
@@ -79,6 +79,7 @@ const AdmissionView: React.FC = () => {
     const [selectedRegistration, setSelectedRegistration] = useState<Registration | null>(null);
     
     const [admissionData, setAdmissionData] = useState<Partial<Student>>({
+        user_id: '',
         full_name: '',
         roll_number: '',
         class_name: '',
@@ -137,6 +138,77 @@ const AdmissionView: React.FC = () => {
         }
     };
 
+    useEffect(() => {
+        const fetchIdentifiers = async () => {
+            if (!supabase || !isAdmissionModalOpen) return;
+            
+            try {
+                // Fetch user_id globally
+                const { data: userData, error: userError } = await supabase
+                    .from('students')
+                    .select('user_id');
+
+                let nextUserId = 'UCS00001';
+                if (!userError && userData) {
+                    const userIds = userData
+                        .map(s => s.user_id)
+                        .filter(Boolean)
+                        .filter(u => typeof u === 'string' && u.startsWith('UCS'));
+                    
+                    if (userIds.length > 0) {
+                        let maxNum = 0;
+                        for (const u of userIds) {
+                            const match = u.match(/UCS(\d+)/);
+                            if (match) {
+                                const num = parseInt(match[1], 10);
+                                if (num > maxNum) maxNum = num;
+                            }
+                        }
+                        nextUserId = `UCS${String(maxNum + 1).padStart(5, '0')}`;
+                    }
+                }
+
+                if (!admissionData.class_name) {
+                    setAdmissionData(prev => ({ ...prev, user_id: nextUserId }));
+                    return;
+                }
+
+                // Fetch roll number for specific class
+                const { data: rollData, error: rollError } = await supabase
+                    .from('students')
+                    .select('roll_number')
+                    .eq('class_name', admissionData.class_name);
+
+                let nextRoll = 'R0001';
+                if (!rollError && rollData) {
+                    const rollNumbers = rollData
+                        .map(s => s.roll_number)
+                        .filter(Boolean)
+                        .filter(r => typeof r === 'string' && r.startsWith('R'));
+                    
+                    if (rollNumbers.length > 0) {
+                        let maxNum = 0;
+                        for (const r of rollNumbers) {
+                            const match = r.match(/R(\d+)/);
+                            if (match) {
+                                const num = parseInt(match[1], 10);
+                                if (num > maxNum) maxNum = num;
+                            }
+                        }
+                        nextRoll = `R${String(maxNum + 1).padStart(4, '0')}`;
+                    }
+                }
+
+                setAdmissionData(prev => ({ ...prev, roll_number: nextRoll, user_id: nextUserId }));
+            } catch(error) {
+                console.error("Identifier generation failed:", error);
+            }
+        };
+
+        fetchIdentifiers();
+    }, [admissionData.class_name, isAdmissionModalOpen]);
+
+
     const handleStartAdmission = (reg: Registration) => {
         setSelectedRegistration(reg);
         setCurrentStep(1);
@@ -148,6 +220,7 @@ const AdmissionView: React.FC = () => {
         const existingParent = parents.find(p => p.phone === reg.phone);
 
         setAdmissionData({
+            user_id: '', // To be filled
             full_name: reg.student_name,
             roll_number: '', // To be filled
             class_name: targetClass?.name || '',
@@ -165,8 +238,9 @@ const AdmissionView: React.FC = () => {
         if (!existingParent) {
             setNewParent({
                 full_name: reg.parent_data?.parents_name || '',
-                phone: reg.phone,
-                email: reg.email,
+                phone: reg.phone || '',
+                email: reg.email || '',
+                occupation: '',
                 status: 'active'
             });
         }
@@ -177,6 +251,7 @@ const AdmissionView: React.FC = () => {
         setSelectedRegistration(null);
         setCurrentStep(1);
         setAdmissionData({
+            user_id: '',
             full_name: '',
             roll_number: '',
             class_name: classes[0]?.name || '',
@@ -191,7 +266,7 @@ const AdmissionView: React.FC = () => {
         });
         setSearchTermParent('');
         setShowAddParentForm(false);
-        setNewParent({ full_name: '', phone: '', status: 'active' });
+        setNewParent({ full_name: '', phone: '', email: '', occupation: '', status: 'active' });
         setIsAdmissionModalOpen(true);
     };
 
@@ -201,7 +276,7 @@ const AdmissionView: React.FC = () => {
         
         setIsSubmitting(true);
         try {
-            let finalParentId = admissionData.parent_id;
+            let finalParentId = admissionData.parent_id || null;
             let finalGuardianName = admissionData.guardian_name;
             let finalContactNumber = admissionData.contact_number;
 
@@ -423,7 +498,20 @@ const AdmissionView: React.FC = () => {
                                 <X size={20} />
                             </button>
                         </div>
-                        <form onSubmit={handleSubmitAdmission} className="p-6 max-h-[85vh] overflow-y-auto">
+                        <form 
+                            onSubmit={(e) => {
+                                e.preventDefault();
+                                if (currentStep === 3) {
+                                    handleSubmitAdmission(e);
+                                }
+                            }} 
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                }
+                            }}
+                            className="p-6 max-h-[85vh] overflow-y-auto"
+                        >
                             <div className="space-y-6 mb-6">
                                 {currentStep === 1 && (
                                     <div className="space-y-6 animate-in slide-in-from-right-4 duration-300">
@@ -442,25 +530,10 @@ const AdmissionView: React.FC = () => {
                                                         <input 
                                                             required
                                                             type="text"
-                                                            value={admissionData.full_name}
+                                                            value={admissionData.full_name || ''}
                                                             onChange={(e) => setAdmissionData({...admissionData, full_name: e.target.value})}
                                                             className="w-full bg-supabase-sidebar border border-supabase-border rounded-lg pl-10 pr-4 py-2 text-sm text-supabase-text focus:outline-none focus:border-supabase-green transition-all"
                                                             placeholder="Student's Full Name"
-                                                        />
-                                                    </div>
-                                                </div>
-
-                                                <div className="space-y-2">
-                                                    <label className="text-[10px] font-bold text-supabase-muted uppercase tracking-widest">Roll Number</label>
-                                                    <div className="relative">
-                                                        <Hash className="absolute left-3 top-1/2 -translate-y-1/2 text-supabase-muted" size={16} />
-                                                        <input 
-                                                            required
-                                                            type="text"
-                                                            value={admissionData.roll_number}
-                                                            onChange={(e) => setAdmissionData({...admissionData, roll_number: e.target.value})}
-                                                            className="w-full bg-supabase-sidebar border border-supabase-border rounded-lg pl-10 pr-4 py-2 text-sm text-supabase-text focus:outline-none focus:border-supabase-green transition-all"
-                                                            placeholder="e.g. 2024-001"
                                                         />
                                                     </div>
                                                 </div>
@@ -472,7 +545,7 @@ const AdmissionView: React.FC = () => {
                                                         <input 
                                                             required
                                                             type="date"
-                                                            value={admissionData.date_of_birth}
+                                                            value={admissionData.date_of_birth || ''}
                                                             onChange={(e) => setAdmissionData({...admissionData, date_of_birth: e.target.value})}
                                                             className="w-full bg-supabase-sidebar border border-supabase-border rounded-lg pl-10 pr-4 py-2 text-sm text-supabase-text focus:outline-none focus:border-supabase-green transition-all"
                                                         />
@@ -535,7 +608,7 @@ const AdmissionView: React.FC = () => {
                                                         <input 
                                                             required
                                                             type="text"
-                                                            value={admissionData.guardian_name}
+                                                            value={admissionData.guardian_name || ''}
                                                             onChange={(e) => {
                                                                 setAdmissionData({...admissionData, guardian_name: e.target.value});
                                                                 setSearchTermParent(e.target.value);
@@ -626,7 +699,7 @@ const AdmissionView: React.FC = () => {
                                                                 <User className="absolute left-3 top-1/2 -translate-y-1/2 text-supabase-muted" size={14} />
                                                                 <input 
                                                                     type="text"
-                                                                    value={newParent.full_name}
+                                                                    value={newParent.full_name || ''}
                                                                     onChange={(e) => setNewParent({...newParent, full_name: e.target.value})}
                                                                     className="w-full bg-supabase-sidebar border border-supabase-border rounded-lg pl-9 pr-3 py-1.5 text-sm text-supabase-text focus:outline-none focus:border-supabase-green"
                                                                 />
@@ -638,7 +711,7 @@ const AdmissionView: React.FC = () => {
                                                                 <Phone className="absolute left-3 top-1/2 -translate-y-1/2 text-supabase-muted" size={14} />
                                                                 <input 
                                                                     type="text"
-                                                                    value={newParent.phone}
+                                                                    value={newParent.phone || ''}
                                                                     onChange={(e) => setNewParent({...newParent, phone: e.target.value})}
                                                                     className="w-full bg-supabase-sidebar border border-supabase-border rounded-lg pl-9 pr-3 py-1.5 text-sm text-supabase-text focus:outline-none focus:border-supabase-green"
                                                                 />
@@ -650,7 +723,7 @@ const AdmissionView: React.FC = () => {
                                                                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-supabase-muted" size={14} />
                                                                 <input 
                                                                     type="email"
-                                                                    value={newParent.email}
+                                                                    value={newParent.email || ''}
                                                                     onChange={(e) => setNewParent({...newParent, email: e.target.value})}
                                                                     className="w-full bg-supabase-sidebar border border-supabase-border rounded-lg pl-9 pr-3 py-1.5 text-sm text-supabase-text focus:outline-none focus:border-supabase-green"
                                                                 />
@@ -662,7 +735,7 @@ const AdmissionView: React.FC = () => {
                                                                 <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 text-supabase-muted" size={14} />
                                                                 <input 
                                                                     type="text"
-                                                                    value={newParent.occupation}
+                                                                    value={newParent.occupation || ''}
                                                                     onChange={(e) => setNewParent({...newParent, occupation: e.target.value})}
                                                                     className="w-full bg-supabase-sidebar border border-supabase-border rounded-lg pl-9 pr-3 py-1.5 text-sm text-supabase-text focus:outline-none focus:border-supabase-green"
                                                                 />
@@ -678,7 +751,7 @@ const AdmissionView: React.FC = () => {
                                                         <textarea 
                                                             required
                                                             rows={2}
-                                                            value={admissionData.address}
+                                                            value={admissionData.address || ''}
                                                             onChange={(e) => setAdmissionData({...admissionData, address: e.target.value})}
                                                             className="w-full bg-supabase-sidebar border border-supabase-border rounded-lg pl-10 pr-4 py-2 text-sm text-supabase-text focus:outline-none focus:border-supabase-green transition-all resize-none"
                                                             placeholder="Full Residential Address"

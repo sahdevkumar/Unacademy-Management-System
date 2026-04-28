@@ -132,6 +132,7 @@ export interface Parent {
 
 export interface Student {
   id: string;
+  user_id?: string;
   full_name: string;
   roll_number?: string;
   class_name: string;
@@ -154,6 +155,7 @@ export interface User {
   role: UserRole;
   name: string;
   id: string;
+  employee_id?: string;
 }
 
 export type PermissionKey = 

@@ -117,6 +117,7 @@ CREATE TABLE IF NOT EXISTS teachers (
 
 CREATE TABLE IF NOT EXISTS students (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id TEXT UNIQUE,
     full_name TEXT NOT NULL,
     roll_number TEXT UNIQUE,
     class_name TEXT REFERENCES classes(name),
